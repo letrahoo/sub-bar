@@ -146,7 +146,7 @@ type BalanceInfo struct {
 	Details      []KVDetail `json:"details,omitempty"`
 }
 
-// EntrySnapshot is the unified live/cached state rendered by Mac Menu Bar and Levi Web UI.
+// EntrySnapshot is the unified live/cached state rendered by the menu bar app and the web UI.
 type EntrySnapshot struct {
 	ID             string        `json:"id"`
 	Name           string        `json:"name"`

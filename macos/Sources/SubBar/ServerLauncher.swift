@@ -2,7 +2,7 @@ import Foundation
 
 /// Launches the `subbar-server` binary bundled inside SubBar.app (Contents/Resources/subbar-server)
 /// so the app works standalone. If a server already answers on the loopback port
-/// (e.g. a launchd-managed instance), nothing is spawned.
+/// (e.g. an instance you started yourself), nothing is spawned.
 final class ServerLauncher {
     private var process: Process?
     private let host = "127.0.0.1"

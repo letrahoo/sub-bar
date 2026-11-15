@@ -17,10 +17,10 @@ import (
 	"sync"
 	"time"
 
-	"xin.letra/sub-cost-view/server/internal/model"
-	"xin.letra/sub-cost-view/server/internal/poller"
-	"xin.letra/sub-cost-view/server/internal/providers"
-	"xin.letra/sub-cost-view/server/internal/store"
+	"github.com/letrahoo/sub-cost-view/server/internal/model"
+	"github.com/letrahoo/sub-cost-view/server/internal/poller"
+	"github.com/letrahoo/sub-cost-view/server/internal/providers"
+	"github.com/letrahoo/sub-cost-view/server/internal/store"
 )
 
 const sessionTTL = 5 * time.Minute
@@ -346,7 +346,7 @@ func (m *Manager) Status(state string) (StatusResponse, error) {
 }
 
 // SubmitCallbackInput accepts either a full redirected URL (http://localhost:51121/oauth-callback?code=...&state=...)
-// or a raw authorization code for cross-device / mobile Levi Remote login.
+// or a raw authorization code for cross-device login.
 func (m *Manager) SubmitCallbackInput(ctx context.Context, expectedState, rawInput string) (StatusResponse, error) {
 	trimmed := strings.TrimSpace(rawInput)
 	if trimmed == "" {

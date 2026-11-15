@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"xin.letra/sub-cost-view/server/internal/api"
-	"xin.letra/sub-cost-view/server/internal/model"
-	"xin.letra/sub-cost-view/server/internal/oauth"
-	"xin.letra/sub-cost-view/server/internal/poller"
-	"xin.letra/sub-cost-view/server/internal/providers"
-	"xin.letra/sub-cost-view/server/internal/store"
+	"github.com/letrahoo/sub-cost-view/server/internal/api"
+	"github.com/letrahoo/sub-cost-view/server/internal/model"
+	"github.com/letrahoo/sub-cost-view/server/internal/oauth"
+	"github.com/letrahoo/sub-cost-view/server/internal/poller"
+	"github.com/letrahoo/sub-cost-view/server/internal/providers"
+	"github.com/letrahoo/sub-cost-view/server/internal/store"
 )
 
 func newTestServerWithInstance(t *testing.T) (*api.Server, http.Handler) {
@@ -199,7 +199,7 @@ func TestOAuthInteractiveCallbackAndPollingLifecycle(t *testing.T) {
 		case strings.Contains(r.URL.Host, "oauth2.googleapis.com") && r.URL.Path == "/token":
 			return mk(200, `{"access_token":"ya29.secret-live","refresh_token":"1//super-refresh-secret","expires_in":3600}`), nil
 		case strings.Contains(r.URL.Path, "userinfo"):
-			return mk(200, `{"email":"letra@example.com"}`), nil
+			return mk(200, `{"email":"alice@example.com"}`), nil
 		case strings.HasSuffix(r.URL.Path, ":loadCodeAssist"):
 			return mk(200, `{"cloudaicompanionProject":"proj-demo","paidTier":{"name":"Google AI Pro"}}`), nil
 		case strings.HasSuffix(r.URL.Path, ":fetchAvailableModels"):
@@ -251,8 +251,8 @@ func TestOAuthInteractiveCallbackAndPollingLifecycle(t *testing.T) {
 	if poll2.Code != http.StatusOK || !strings.Contains(poll2.Body.String(), `"status":"completed"`) {
 		t.Fatalf("expected completed status, got %d %s", poll2.Code, poll2.Body.String())
 	}
-	if !strings.Contains(poll2.Body.String(), `"Antigravity (letra)"`) {
-		t.Fatalf("expected auto-filled name Antigravity (letra), got %s", poll2.Body.String())
+	if !strings.Contains(poll2.Body.String(), `"Antigravity (alice)"`) {
+		t.Fatalf("expected auto-filled name Antigravity (alice), got %s", poll2.Body.String())
 	}
 	if strings.Contains(poll2.Body.String(), "ya29.secret-live") || strings.Contains(poll2.Body.String(), "1//super-refresh-secret") {
 		t.Fatalf("oauth tokens leaked in status endpoint: %s", poll2.Body.String())
@@ -401,7 +401,7 @@ func TestKimiDeviceOAuthWeChatFlowLifecycle(t *testing.T) {
 			}`), nil
 		case r.URL.Host == "api.kimi.com" && r.URL.Path == "/coding/v1/usages":
 			return mk(200, `{
-				"user": {"nickname": "Letra", "membership": {"level": "LEVEL_INTERMEDIATE"}},
+				"user": {"nickname": "Alice", "membership": {"level": "LEVEL_INTERMEDIATE"}},
 				"usage": {"limit": "100", "used": "12", "remaining": "88", "resetTime": "2026-11-22T00:00:00Z"},
 				"limits": [{"window": {"duration": 300, "timeUnit": "TIME_UNIT_MINUTE"}, "detail": {"limit": "100", "used": "5", "remaining": "95", "resetTime": "2026-11-16T04:00:00Z"}}]
 			}`), nil
@@ -448,8 +448,8 @@ func TestKimiDeviceOAuthWeChatFlowLifecycle(t *testing.T) {
 	if finalBody == "" {
 		t.Fatalf("timed out waiting for kimi device oauth completion")
 	}
-	if !strings.Contains(finalBody, `"Kimi 订阅 (Letra)"`) || !strings.Contains(finalBody, `"Moderato"`) {
-		t.Fatalf("expected auto-named Kimi 订阅 (Letra) with Moderato plan, got %s", finalBody)
+	if !strings.Contains(finalBody, `"Kimi 订阅 (Alice)"`) || !strings.Contains(finalBody, `"Moderato"`) {
+		t.Fatalf("expected auto-named Kimi 订阅 (Alice) with Moderato plan, got %s", finalBody)
 	}
 	if strings.Contains(finalBody, "kimi-at-secret-999") || strings.Contains(finalBody, "kimi-rt-secret-999") {
 		t.Fatalf("kimi tokens leaked in /api/oauth/status: %s", finalBody)

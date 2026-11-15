@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"xin.letra/sub-cost-view/server/internal/model"
+	"github.com/letrahoo/sub-cost-view/server/internal/model"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -180,7 +180,7 @@ func TestAntigravityAutoRefreshAndModelGrouping(t *testing.T) {
 				"expires_in": 3600
 			}`), nil
 		case strings.Contains(r.URL.Path, "userinfo"):
-			return jsonResp(200, `{"email": "letra@example.com"}`), nil
+			return jsonResp(200, `{"email": "alice@example.com"}`), nil
 		case strings.HasSuffix(r.URL.Path, ":loadCodeAssist"):
 			if r.Header.Get("Authorization") != "Bearer ya29.fresh-agy-token" {
 				return jsonResp(401, `{"error":"expired"}`), nil
@@ -354,7 +354,7 @@ func TestKimiSubscriptionRefreshAndWebBillingFallback(t *testing.T) {
 			}
 			return jsonResp(200, `{
 				"user": {
-					"nickname": "Letra",
+					"nickname": "Alice",
 					"membership": {"level": "LEVEL_INTERMEDIATE"}
 				},
 				"usage": {
@@ -412,8 +412,8 @@ func TestKimiSubscriptionRefreshAndWebBillingFallback(t *testing.T) {
 	if !refreshed || res.TokenUpdate == nil || res.TokenUpdate.AccessToken != "kimi-fresh-at" {
 		t.Fatalf("expected reactive Kimi token refresh, got %+v", res.TokenUpdate)
 	}
-	if res.PlanLabel != "Moderato" || res.AccountEmail != "Letra" {
-		t.Fatalf("expected Moderato / Letra, got plan=%q acct=%q", res.PlanLabel, res.AccountEmail)
+	if res.PlanLabel != "Moderato" || res.AccountEmail != "Alice" {
+		t.Fatalf("expected Moderato / Alice, got plan=%q acct=%q", res.PlanLabel, res.AccountEmail)
 	}
 	if len(res.Windows) != 2 || res.Windows[0].WindowSeconds != 18000 || res.Windows[0].UsedPercent != 7.0 || res.Windows[1].UsedPercent != 18.0 {
 		t.Fatalf("unexpected kimi windows: %+v", res.Windows)
@@ -493,7 +493,7 @@ func TestAntigravityAICodeFetchQuotaStatusWeeklyAndLegacyCLIFallback(t *testing.
 	res, err := agy.Fetch(context.Background(), model.EntryConfig{
 		AuthMode:     "oauth",
 		Secret:       "ya29.with-aicode-scope",
-		AccountEmail: "letra@example.com",
+		AccountEmail: "alice@example.com",
 	})
 	if err != nil {
 		t.Fatalf("direct aicode fetch failed: %v", err)
@@ -548,7 +548,7 @@ func TestAntigravityAICodeFetchQuotaStatusWeeklyAndLegacyCLIFallback(t *testing.
 	legacyRes, err := agy.Fetch(context.Background(), model.EntryConfig{
 		AuthMode:     "oauth",
 		Secret:       "ya29.legacy-without-aicode",
-		AccountEmail: "letra@example.com",
+		AccountEmail: "alice@example.com",
 	})
 	if err != nil {
 		t.Fatalf("legacy fallback fetch failed: %v", err)

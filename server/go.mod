@@ -1,3 +1,3 @@
-module xin.letra/sub-cost-view/server
+module github.com/letrahoo/sub-cost-view/server
 
 go 1.22

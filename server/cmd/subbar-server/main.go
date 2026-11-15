@@ -14,10 +14,10 @@ import (
 	"syscall"
 	"time"
 
-	"xin.letra/sub-cost-view/server/internal/api"
-	"xin.letra/sub-cost-view/server/internal/poller"
-	"xin.letra/sub-cost-view/server/internal/providers"
-	"xin.letra/sub-cost-view/server/internal/store"
+	"github.com/letrahoo/sub-cost-view/server/internal/api"
+	"github.com/letrahoo/sub-cost-view/server/internal/poller"
+	"github.com/letrahoo/sub-cost-view/server/internal/providers"
+	"github.com/letrahoo/sub-cost-view/server/internal/store"
 )
 
 func main() {
@@ -39,7 +39,7 @@ func main() {
 	if !*allowLANFlag {
 		ip := net.ParseIP(host)
 		if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
-			log.Fatalf("refusing non-loopback bind %q without -allow-non-loopback (use Caddy/Tailscale Serve for ingress)", *addrFlag)
+			log.Fatalf("refusing non-loopback bind %q without -allow-non-loopback (put a reverse proxy in front for remote access)", *addrFlag)
 		}
 	}
 

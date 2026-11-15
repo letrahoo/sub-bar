@@ -1,7 +1,7 @@
 GO ?= go
 GO_LDFLAGS := -linkmode=external -s -w
 
-.PHONY: all server app test install-runtime clean
+.PHONY: all server app test clean
 
 all: server app
 
@@ -16,15 +16,6 @@ app:
 
 test:
 	GOCACHE=$${GOCACHE:-/tmp/go-build} GOTMPDIR=$${GOTMPDIR:-/tmp} $(GO) -C server test -ldflags="-linkmode=external" -v ./...
-
-install-runtime: server app
-	mkdir -p "$$HOME/.local/share/sub-cost-view" "$$HOME/Library/Application Support/SubCostView"
-	chmod 700 "$$HOME/Library/Application Support/SubCostView"
-	cp -f dist/subbar-server "$$HOME/.local/share/sub-cost-view/subbar-server"
-	chmod 755 "$$HOME/.local/share/sub-cost-view/subbar-server"
-	rm -rf "$$HOME/Applications/SubBar.app"
-	mkdir -p "$$HOME/Applications"
-	cp -R dist/SubBar.app "$$HOME/Applications/SubBar.app"
 
 clean:
 	rm -rf dist macos/.build

@@ -569,7 +569,7 @@
         $('oauth-paste-details').classList.remove('hidden');
         $('oauth-status-text').textContent = sess.callbackMode === 'loopback' && !isRemoteBrowserHost()
           ? `正在监听回调 (127.0.0.1:${sess.callbackPort})… 完成浏览器登录后将自动接入`
-          : '请点击上方链接完成授权，随后在下方粘贴回调地址（若在 Mac Mini 本机打开则自动完成）';
+          : '请点击上方链接完成授权，随后在下方粘贴回调地址（若在运行服务的本机浏览器打开则自动完成）';
         $('oauth-paste-details').open = (sess.callbackMode !== 'loopback' || isRemoteBrowserHost());
       }
 

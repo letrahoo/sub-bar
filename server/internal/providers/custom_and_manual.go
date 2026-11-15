@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"xin.letra/sub-cost-view/server/internal/model"
+	"github.com/letrahoo/sub-cost-view/server/internal/model"
 )
 
 // ============================================================================

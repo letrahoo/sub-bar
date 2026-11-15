@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"xin.letra/sub-cost-view/server/internal/model"
-	"xin.letra/sub-cost-view/server/internal/oauth"
-	"xin.letra/sub-cost-view/server/internal/poller"
-	"xin.letra/sub-cost-view/server/internal/providers"
-	"xin.letra/sub-cost-view/server/internal/store"
-	"xin.letra/sub-cost-view/server/internal/web"
+	"github.com/letrahoo/sub-cost-view/server/internal/model"
+	"github.com/letrahoo/sub-cost-view/server/internal/oauth"
+	"github.com/letrahoo/sub-cost-view/server/internal/poller"
+	"github.com/letrahoo/sub-cost-view/server/internal/providers"
+	"github.com/letrahoo/sub-cost-view/server/internal/store"
+	"github.com/letrahoo/sub-cost-view/server/internal/web"
 )
 
 const Version = "0.2.0"
@@ -84,7 +84,7 @@ func (s *Server) securityMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Cache-Control", "no-store")
 		}
 
-		// Block cross-site browser requests (protects loopback & Tailnet WebView from CSRF).
+		// Block cross-site browser requests (CSRF protection).
 		if strings.EqualFold(r.Header.Get("Sec-Fetch-Site"), "cross-site") {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "cross-site request rejected"})
 			return
