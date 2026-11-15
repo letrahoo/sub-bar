@@ -1,0 +1,17 @@
+# Build outputs
+dist/
+build/
+*.app/
+server/subbar-server
+macos/.build/
+macos/.swiftpm/
+
+# Local runtime state & secrets (never commit!)
+.env
+*.local.json
+*.secret*
+state/
+data/
+
+# macOS
+.DS_Store

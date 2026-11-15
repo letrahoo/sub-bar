@@ -1,0 +1,51 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+
+      - name: Build universal server
+        run: |
+          mkdir -p dist
+          cd server
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ../dist/server-arm64 ./cmd/subbar-server
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ../dist/server-amd64 ./cmd/subbar-server
+          cd ..
+          lipo -create -output dist/subbar-server dist/server-arm64 dist/server-amd64
+          rm dist/server-arm64 dist/server-amd64
+
+      - name: Build universal SubBar.app
+        env:
+          SUBBAR_SWIFT_ARCHS: "--arch arm64 --arch x86_64"
+        run: ./macos/Scripts/bundle-app.sh
+
+      - name: Checksum
+        run: cd dist && shasum -a 256 SubBar-macOS.zip > SubBar-macOS.zip.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SubBar-macOS
+          path: |
+            dist/SubBar-macOS.zip
+            dist/SubBar-macOS.zip.sha256
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/SubBar-macOS.zip
+            dist/SubBar-macOS.zip.sha256
