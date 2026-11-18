@@ -6,16 +6,18 @@ import (
 	"testing"
 )
 
-func TestOAuthClientsAreUserSuppliedAndPersisted(t *testing.T) {
-	if id, _ := OAuthClientFor("antigravity_oauth"); id != "" {
-		t.Fatalf("no credentials should be built in, got %q", id)
+func TestOAuthClientsDefaultsAndOverrides(t *testing.T) {
+	oauthClients = map[string]OAuthClient{}
+	for _, providerID := range []string{"antigravity_oauth", "codex_oauth", "claude_oauth", "kimi_oauth"} {
+		st, ok := OAuthClientStatusFor(providerID)
+		if !ok || !st.Configured {
+			t.Fatalf("expected built-in default for %s to be configured, got %+v", providerID, st)
+		}
 	}
+
 	path := filepath.Join(t.TempDir(), "oauth-clients.json")
 	if err := SetOAuthClient(path, "antigravity_oauth", "my-id-12345678", ""); err != nil {
 		t.Fatal(err)
-	}
-	if st, _ := OAuthClientStatusFor("antigravity_oauth"); st.Configured {
-		t.Fatal("secret is required for antigravity")
 	}
 	if err := SetOAuthClient(path, "antigravity_oauth", "", "my-secret"); err != nil {
 		t.Fatal(err)
@@ -32,7 +34,12 @@ func TestOAuthClientsAreUserSuppliedAndPersisted(t *testing.T) {
 		t.Fatal(err)
 	}
 	if id, sec := OAuthClientFor("antigravity_oauth"); id != "my-id-12345678" || sec != "my-secret" {
-		t.Fatal("reload failed")
+		t.Fatalf("reload override failed: got %q / %q", id, sec)
+	}
+
+	t.Setenv("SUBBAR_OAUTH_ANTIGRAVITY_OAUTH_CLIENT_ID", "env-override-id")
+	if id, sec := OAuthClientFor("antigravity_oauth"); id != "env-override-id" || sec != "my-secret" {
+		t.Fatalf("env override failed: got %q / %q", id, sec)
 	}
 	oauthClients = map[string]OAuthClient{}
 }

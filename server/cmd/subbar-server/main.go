@@ -14,10 +14,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/letrahoo/sub-cost-view/server/internal/api"
-	"github.com/letrahoo/sub-cost-view/server/internal/poller"
-	"github.com/letrahoo/sub-cost-view/server/internal/providers"
-	"github.com/letrahoo/sub-cost-view/server/internal/store"
+	"github.com/letrahoo/sub-bar/server/internal/api"
+	"github.com/letrahoo/sub-bar/server/internal/poller"
+	"github.com/letrahoo/sub-bar/server/internal/providers"
+	"github.com/letrahoo/sub-bar/server/internal/store"
 )
 
 func main() {

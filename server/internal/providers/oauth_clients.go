@@ -8,16 +8,33 @@ import (
 	"sync"
 )
 
-// OAuth client credentials are intentionally NOT compiled into the binary.
-// They are supplied at runtime, per provider ID, from (in priority order):
+// Public OAuth client identifiers used by official CLI/desktop integrations are built in
+// as out-of-the-box defaults, and can be overridden at runtime (in priority order):
 //
 //  1. environment variables SUBBAR_OAUTH_<PROVIDER>_CLIENT_ID / _CLIENT_SECRET
 //     (e.g. SUBBAR_OAUTH_ANTIGRAVITY_OAUTH_CLIENT_ID)
 //  2. a JSON file loaded via LoadOAuthClients (default: <data-dir>/oauth-clients.json):
 //     {"antigravity_oauth": {"client_id": "...", "client_secret": "..."}, ...}
+//  3. built-in public client defaults (defaultOAuthClients)
 type OAuthClient struct {
 	ClientID     string `json:"client_id"`
 	ClientSecret string `json:"client_secret,omitempty"`
+}
+
+var defaultOAuthClients = map[string]OAuthClient{
+	"antigravity_oauth": {
+		ClientID:     "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
+		ClientSecret: "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",
+	},
+	"codex_oauth": {
+		ClientID: "app_EMoamEEZ73f0CkXaXp7hrann",
+	},
+	"claude_oauth": {
+		ClientID: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+	},
+	"kimi_oauth": {
+		ClientID: "17e5f671-d194-4dfb-9706-5516cb48c098",
+	},
 }
 
 var (
@@ -108,19 +125,29 @@ func LoadOAuthClients(path string) error {
 	return nil
 }
 
-// OAuthClientFor returns the configured client credentials for a provider ("" if unset).
+// OAuthClientFor returns the effective client credentials for a provider
+// (priority: env vars > oauth-clients.json > built-in defaults).
 func OAuthClientFor(providerID string) (id, secret string) {
-	key := "SUBBAR_OAUTH_" + strings.ToUpper(providerID)
-	id = strings.TrimSpace(os.Getenv(key + "_CLIENT_ID"))
-	secret = strings.TrimSpace(os.Getenv(key + "_CLIENT_SECRET"))
+	def := defaultOAuthClients[providerID]
+	id = def.ClientID
+	secret = def.ClientSecret
+
 	oauthClientsMu.RLock()
 	c := oauthClients[providerID]
 	oauthClientsMu.RUnlock()
-	if id == "" {
-		id = strings.TrimSpace(c.ClientID)
-		if secret == "" {
-			secret = strings.TrimSpace(c.ClientSecret)
-		}
+	if v := strings.TrimSpace(c.ClientID); v != "" {
+		id = v
+	}
+	if v := strings.TrimSpace(c.ClientSecret); v != "" {
+		secret = v
+	}
+
+	key := "SUBBAR_OAUTH_" + strings.ToUpper(providerID)
+	if v := strings.TrimSpace(os.Getenv(key + "_CLIENT_ID")); v != "" {
+		id = v
+	}
+	if v := strings.TrimSpace(os.Getenv(key + "_CLIENT_SECRET")); v != "" {
+		secret = v
 	}
 	return id, secret
 }

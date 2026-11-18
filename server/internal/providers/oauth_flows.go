@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/letrahoo/sub-cost-view/server/internal/model"
+	"github.com/letrahoo/sub-bar/server/internal/model"
 )
 
 type OAuthSpec struct {

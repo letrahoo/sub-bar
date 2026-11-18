@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/letrahoo/sub-cost-view/server/internal/model"
+	"github.com/letrahoo/sub-bar/server/internal/model"
 )
 
 type persistedEntries struct {
@@ -44,9 +44,23 @@ func DefaultDataDir() (string, error) {
 		return "", err
 	}
 	if runtime.GOOS == "darwin" {
-		return filepath.Join(home, "Library", "Application Support", "SubCostView"), nil
+		primary := filepath.Join(home, "Library", "Application Support", "SubBar")
+		legacy := filepath.Join(home, "Library", "Application Support", "SubCostView")
+		if _, err := os.Stat(primary); os.IsNotExist(err) {
+			if info, lErr := os.Stat(legacy); lErr == nil && info.IsDir() {
+				return legacy, nil
+			}
+		}
+		return primary, nil
 	}
-	return filepath.Join(home, ".local", "share", "sub-cost-view"), nil
+	primary := filepath.Join(home, ".local", "share", "sub-bar")
+	legacy := filepath.Join(home, ".local", "share", "sub-cost-view")
+	if _, err := os.Stat(primary); os.IsNotExist(err) {
+		if info, lErr := os.Stat(legacy); lErr == nil && info.IsDir() {
+			return legacy, nil
+		}
+	}
+	return primary, nil
 }
 
 func Open(dir string) (*Store, error) {

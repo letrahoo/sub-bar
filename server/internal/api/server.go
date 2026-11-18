@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/letrahoo/sub-cost-view/server/internal/model"
-	"github.com/letrahoo/sub-cost-view/server/internal/oauth"
-	"github.com/letrahoo/sub-cost-view/server/internal/poller"
-	"github.com/letrahoo/sub-cost-view/server/internal/providers"
-	"github.com/letrahoo/sub-cost-view/server/internal/store"
-	"github.com/letrahoo/sub-cost-view/server/internal/web"
+	"github.com/letrahoo/sub-bar/server/internal/model"
+	"github.com/letrahoo/sub-bar/server/internal/oauth"
+	"github.com/letrahoo/sub-bar/server/internal/poller"
+	"github.com/letrahoo/sub-bar/server/internal/providers"
+	"github.com/letrahoo/sub-bar/server/internal/store"
+	"github.com/letrahoo/sub-bar/server/internal/web"
 )
 
 const Version = "0.2.0"

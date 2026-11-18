@@ -33,13 +33,13 @@ App 启动时会拉起内置服务（`127.0.0.1:8328`），退出时自动关闭
 
 ## OAuth 客户端凭据
 
-项目不内置任何 OAuth client_id / secret。使用某个服务的网页授权登录前，请在添加入口弹窗的 OAuth 区域填入该服务的客户端凭据。凭据保存在数据目录的 `oauth-clients.json`（权限 `0600`），接口不会回显。
+项目已默认内置各官方 CLI 的公开 OAuth 客户端标识（Antigravity、Codex、Claude、Kimi），开箱即可直接点击网页授权登录，无需手动配置。
 
-也可用环境变量：`SUBBAR_OAUTH_<PROVIDER>_CLIENT_ID` 和 `_CLIENT_SECRET`，如 `SUBBAR_OAUTH_ANTIGRAVITY_OAUTH_CLIENT_ID`。API Key 和手动类入口不需要。
+如需自定义覆盖，可在添加入口弹窗的 OAuth 区域填写（保存在数据目录的 `oauth-clients.json`，权限 `0600`，接口不回显），或设置环境变量 `SUBBAR_OAUTH_<PROVIDER>_CLIENT_ID` 和 `_CLIENT_SECRET`（如 `SUBBAR_OAUTH_ANTIGRAVITY_OAUTH_CLIENT_ID`）。
 
 ## 数据与安全
 
-- 数据目录：`~/Library/Application Support/SubCostView`（可用 `SUBBAR_DATA_DIR` 覆盖），权限 `0700`。
+- 数据目录：`~/Library/Application Support/SubBar`（可用 `SUBBAR_DATA_DIR` 覆盖），权限 `0700`。
 - 服务默认只绑定回环地址。如需对外访问，使用 `-allow-non-loopback` 并在前面加带认证的反向代理。
 - 拒绝跨站浏览器请求。
 

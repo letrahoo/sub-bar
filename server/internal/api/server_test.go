@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/letrahoo/sub-cost-view/server/internal/api"
-	"github.com/letrahoo/sub-cost-view/server/internal/model"
-	"github.com/letrahoo/sub-cost-view/server/internal/oauth"
-	"github.com/letrahoo/sub-cost-view/server/internal/poller"
-	"github.com/letrahoo/sub-cost-view/server/internal/providers"
-	"github.com/letrahoo/sub-cost-view/server/internal/store"
+	"github.com/letrahoo/sub-bar/server/internal/api"
+	"github.com/letrahoo/sub-bar/server/internal/model"
+	"github.com/letrahoo/sub-bar/server/internal/oauth"
+	"github.com/letrahoo/sub-bar/server/internal/poller"
+	"github.com/letrahoo/sub-bar/server/internal/providers"
+	"github.com/letrahoo/sub-bar/server/internal/store"
 )
 
 func newTestServerWithInstance(t *testing.T) (*api.Server, http.Handler) {

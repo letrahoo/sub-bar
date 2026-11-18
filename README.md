@@ -33,13 +33,13 @@ The app starts its bundled server on `127.0.0.1:8328` and stops it on quit. The 
 
 ## OAuth client credentials
 
-No OAuth client IDs or secrets are bundled. Before using browser login for a service, enter that service's client credentials in the OAuth section of the add-entry dialog. They are stored in `oauth-clients.json` in the data directory (mode `0600`) and are never returned by the API.
+Public OAuth client IDs for official CLI integrations (Antigravity, Codex, Claude, Kimi) are built in out of the box—browser login works with zero setup.
 
-Environment variables also work: `SUBBAR_OAUTH_<PROVIDER>_CLIENT_ID` and `_CLIENT_SECRET`, for example `SUBBAR_OAUTH_ANTIGRAVITY_OAUTH_CLIENT_ID`. API-key and manual sources need none of this.
+If needed, you can override any provider's client credentials in the OAuth section of the add-entry dialog (saved locally in `oauth-clients.json` with mode `0600`) or via environment variables `SUBBAR_OAUTH_<PROVIDER>_CLIENT_ID` and `_CLIENT_SECRET` (for example `SUBBAR_OAUTH_ANTIGRAVITY_OAUTH_CLIENT_ID`).
 
 ## Data and security
 
-- Data directory: `~/Library/Application Support/SubCostView` (override with `SUBBAR_DATA_DIR`), created `0700`.
+- Data directory: `~/Library/Application Support/SubBar` (override with `SUBBAR_DATA_DIR`), created `0700`.
 - The server binds to loopback only. Use `-allow-non-loopback` to expose it, and put an authenticating proxy in front.
 - Cross-site browser requests are rejected.
 

@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/letrahoo/sub-cost-view/server/internal/model"
-	"github.com/letrahoo/sub-cost-view/server/internal/providers"
-	"github.com/letrahoo/sub-cost-view/server/internal/store"
+	"github.com/letrahoo/sub-bar/server/internal/model"
+	"github.com/letrahoo/sub-bar/server/internal/providers"
+	"github.com/letrahoo/sub-bar/server/internal/store"
 )
 
 type Poller struct {
