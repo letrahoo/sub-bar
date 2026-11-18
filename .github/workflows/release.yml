@@ -32,14 +32,21 @@ jobs:
         run: ./macos/Scripts/bundle-app.sh
 
       - name: Checksum
-        run: cd dist && shasum -a 256 SubBar-macOS.zip > SubBar-macOS.zip.sha256
+        working-directory: dist
+        run: |
+          for file in SubBar-macOS.zip SubBar-macOS.dmg; do
+            shasum -a 256 "$file" > "$file.sha256"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
           name: SubBar-macOS
+          if-no-files-found: error
           path: |
             dist/SubBar-macOS.zip
             dist/SubBar-macOS.zip.sha256
+            dist/SubBar-macOS.dmg
+            dist/SubBar-macOS.dmg.sha256
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -49,3 +56,5 @@ jobs:
           files: |
             dist/SubBar-macOS.zip
             dist/SubBar-macOS.zip.sha256
+            dist/SubBar-macOS.dmg
+            dist/SubBar-macOS.dmg.sha256

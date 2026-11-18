@@ -11,7 +11,7 @@
 
 ## 安装
 
-在 [Releases](../../releases) 下载 `SubBar-macOS.zip`（支持 Apple Silicon 和 Intel），解压后把 `SubBar.app` 拖入「应用程序」。如需本地构建 DMG，运行 `make all` 后打开 `dist/SubBar-macOS.dmg`。
+在 [Releases](../../releases) 下载 `SubBar-macOS.dmg` 或 `SubBar-macOS.zip`（支持 Apple Silicon 和 Intel），把 `SubBar.app` 拖入「应用程序」。如需本地构建 DMG，运行 `make all` 后打开 `dist/SubBar-macOS.dmg`。
 
 构建产物为 ad-hoc 签名，未公证。首次打开请右键选择「打开」，或执行：
 
