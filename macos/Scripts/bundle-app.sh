@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MACOS_DIR="$ROOT_DIR/macos"
-DIST_DIR="$ROOT_DIR/dist"
+DIST_DIR="${SUBBAR_DIST_DIR:-$ROOT_DIR/dist}"
 APP_BUNDLE="$DIST_DIR/SubBar.app"
 ZIP_OUT="$DIST_DIR/SubBar-macOS.zip"
 
@@ -28,7 +28,9 @@ else
   echo "warning: dist/subbar-server not found; app will be a client only" >&2
 fi
 
-# Generate high-contrast AppIcon.icns natively via CoreGraphics + iconutil
+cp "$ROOT_DIR/server/internal/web/static/material-icons.LICENSE.txt" "$APP_BUNDLE/Contents/Resources/"
+
+# Everforest app tile with the same three-column bar_chart mark as the popover.
 ICONSET_DIR="$(mktemp -d /tmp/SubBarIcon.XXXXXX)/AppIcon.iconset"
 mkdir -p "$ICONSET_DIR"
 swift - "$ICONSET_DIR" <<'SWIFT_ICON'
@@ -60,29 +62,14 @@ for (name, px) in specs {
     let pad = s * 0.08
     let card = NSRect(x: pad, y: pad, width: s - pad * 2, height: s - pad * 2)
     let bgPath = NSBezierPath(roundedRect: card, xRadius: s * 0.22, yRadius: s * 0.22)
-    NSColor(srgbRed: 0.04, green: 0.06, blue: 0.10, alpha: 1.0).setFill()
+    NSColor(srgbRed: 230/255, green: 195/255, blue: 132/255, alpha: 1).setFill()
     bgPath.fill()
 
-    NSColor(srgbRed: 0.18, green: 0.83, blue: 0.75, alpha: 1.0).setStroke()
-    bgPath.lineWidth = max(1.0, s * 0.03)
-    bgPath.stroke()
-
-    let barH = s * 0.11
-    let x0 = s * 0.22
-    let fullW = s * 0.56
-    let rows: [(CGFloat, CGFloat, NSColor)] = [
-        (0.62, 0.82, NSColor(srgbRed: 0.18, green: 0.83, blue: 0.75, alpha: 1.0)),
-        (0.44, 0.58, NSColor(srgbRed: 0.13, green: 0.77, blue: 0.37, alpha: 1.0)),
-        (0.26, 0.36, NSColor(srgbRed: 0.98, green: 0.75, blue: 0.14, alpha: 1.0))
-    ]
-    for (ry, ratio, color) in rows {
-        let track = NSBezierPath(roundedRect: NSRect(x: x0, y: s * ry, width: fullW, height: barH), xRadius: barH/2, yRadius: barH/2)
-        NSColor(srgbRed: 0.16, green: 0.22, blue: 0.30, alpha: 1.0).setFill()
-        track.fill()
-
-        let fill = NSBezierPath(roundedRect: NSRect(x: x0, y: s * ry, width: fullW * ratio, height: barH), xRadius: barH/2, yRadius: barH/2)
-        color.setFill()
-        fill.fill()
+    NSColor(srgbRed: 45/255, green: 53/255, blue: 59/255, alpha: 1).setFill()
+    let unit = card.width / 24
+    for (x, width, height): (CGFloat, CGFloat, CGFloat) in [(5, 3, 9.8), (10.6, 2.8, 14), (16.2, 2.8, 6)] {
+        NSBezierPath(rect: NSRect(x: card.minX + x * unit, y: card.minY + 5 * unit,
+                                  width: width * unit, height: height * unit)).fill()
     }
     NSGraphicsContext.restoreGraphicsState()
     if let png = rep.representation(using: .png, properties: [:]) {
@@ -116,9 +103,9 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'EOF'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>0.1.1</string>
   <key>CFBundleVersion</key>
-  <string>2</string>
+  <string>3</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>
@@ -134,8 +121,17 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'EOF'
 </plist>
 EOF
 
-codesign --force --deep --sign - "$APP_BUNDLE" >/dev/null 2>&1 || true
+codesign --force --deep --sign - "$APP_BUNDLE"
+codesign --verify --deep --strict "$APP_BUNDLE"
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$ZIP_OUT"
 
-echo "==> Packaged: $APP_BUNDLE (and $ZIP_OUT)"
-du -sh "$APP_BUNDLE" "$ZIP_OUT"
+# Stage only installable files (not the server build or ZIP) inside the disk image.
+DMG_STAGE="$(mktemp -d)"
+trap 'rm -rf "$DMG_STAGE"' EXIT
+/usr/bin/ditto "$APP_BUNDLE" "$DMG_STAGE/SubBar.app"
+ln -s /Applications "$DMG_STAGE/Applications"
+DMG_OUT="$DIST_DIR/SubBar-macOS.dmg"
+hdiutil create -ov -volname SubBar -srcfolder "$DMG_STAGE" -fs HFS+ -format UDZO "$DMG_OUT"
+hdiutil verify "$DMG_OUT"
+
+du -sh "$APP_BUNDLE" "$ZIP_OUT" "$DMG_OUT"

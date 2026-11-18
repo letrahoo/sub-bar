@@ -7,6 +7,14 @@ enum PopoverTab: String, CaseIterable {
     case sub = "订阅配额"
     case bal = "API 余额"
     case prefs = "偏好设置"
+
+    func includes(_ item: EntrySnapshot) -> Bool {
+        switch self {
+        case .all, .prefs: return true
+        case .sub: return item.kind == "subscription"
+        case .bal: return item.kind == "balance"
+        }
+    }
 }
 
 struct PopoverView: View {
@@ -24,7 +32,7 @@ struct PopoverView: View {
 
             VStack(spacing: 0) {
                 headerBar
-                summaryStrip
+                if activeTab != .prefs { summaryStrip }
                 tabBar
                 Divider().background(HCTheme.border)
 
@@ -39,16 +47,17 @@ struct PopoverView: View {
 
             if let toast = state.toastMessage {
                 Text(toast)
-                    .font(.system(size: 12.5, weight: .bold))
-                    .foregroundColor(.black)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundColor(HCTheme.bg)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
-                    .background(Capsule().fill(Color.white))
+                    .background(Capsule().fill(HCTheme.textPrimary))
                     .padding(.bottom, 42)
                     .transition(.opacity)
             }
         }
         .frame(width: 400, height: 640)
+        .tint(HCTheme.accent)
         .preferredColorScheme(.dark)
         .onReceive(ticker) { d in nowTick = d }
         .sheet(isPresented: $showEditor) {
@@ -67,12 +76,12 @@ struct PopoverView: View {
                     RoundedRectangle(cornerRadius: 7)
                         .fill(HCTheme.accent)
                         .frame(width: 26, height: 26)
-                    Text("⚡")
-                        .font(.system(size: 13))
+                    MaterialIcon.chart.glyph(23)
+                        .foregroundStyle(HCTheme.bg)
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("订阅与余额")
-                        .font(.system(size: 14.5, weight: .heavy))
+                        .font(.system(size: 14.5, weight: .semibold))
                         .foregroundColor(HCTheme.textPrimary)
                     Text(statusSubtitle)
                         .font(.system(size: 11, weight: .semibold).monospacedDigit())
@@ -85,8 +94,8 @@ struct PopoverView: View {
             Button {
                 state.showRemaining.toggle()
             } label: {
-                Text(state.showRemaining ? "剩余%" : "已用%")
-                    .font(.system(size: 11.5, weight: .bold))
+                Text(state.showRemaining ? "看剩余" : "看已用")
+                    .font(.system(size: 11.5, weight: .medium))
                     .foregroundColor(HCTheme.textPrimary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
@@ -96,26 +105,17 @@ struct PopoverView: View {
             .buttonStyle(.plain)
             .help("切换百分比按剩余展示或按已用展示")
 
-            Button {
+            IconButton(icon: .refresh, title: state.isLoading ? "正在刷新" : "刷新全部", busy: state.isLoading) {
                 Task { await state.triggerRefreshAll() }
-            } label: {
-                Text(state.isLoading ? "…" : "↻")
-                    .font(.system(size: 13, weight: .black))
-                    .foregroundColor(HCTheme.textPrimary)
-                    .frame(width: 28, height: 26)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(HCTheme.cardElevated))
-                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(HCTheme.border, lineWidth: 1.2))
             }
-            .buttonStyle(.plain)
-            .help("立即刷新全部入口")
 
             Button {
                 editingEntryID = nil
                 showEditor = true
             } label: {
-                Text("+ 添加")
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundColor(.black)
+                MaterialIcon.add.label("添加", size: 14)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(HCTheme.bg)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
                     .background(RoundedRectangle(cornerRadius: 7).fill(HCTheme.accent))
@@ -129,10 +129,11 @@ struct PopoverView: View {
 
     private var statusSubtitle: String {
         if state.errorMessage != nil && state.snapshot == nil {
-            return "Server 未连接"
+            return "服务未连接"
         }
+        if state.errorMessage != nil { return "连接中断 · 显示上次数据" }
         if let gen = state.snapshot?.generatedAt {
-            return "更新于 \(TimeFmt.relativeAgo(gen, now: nowTick))"
+            return "\(TimeFmt.relativeAgo(gen, now: nowTick))更新"
         }
         return "同步中…"
     }
@@ -145,10 +146,10 @@ struct PopoverView: View {
         let monthStr = formatTotals(sum?.monthlyFixedCosts)
 
         return HStack(spacing: 8) {
-            summaryBox(title: "可用 API 余额", value: balStr.isEmpty ? "暂无" : balStr)
+            summaryBox(title: "可用 API 余额", value: sum == nil ? "—" : balStr.isEmpty ? "暂无" : balStr)
             summaryBox(
                 title: "固定月订阅",
-                value: monthStr.isEmpty ? "未设置" : "\(monthStr)/月"
+                value: sum == nil ? "—" : monthStr.isEmpty ? "未设置" : "\(monthStr)/月"
             )
         }
         .padding(.horizontal, 12)
@@ -158,10 +159,10 @@ struct PopoverView: View {
     private func summaryBox(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundColor(HCTheme.textMuted)
             Text(value)
-                .font(.system(size: 14, weight: .heavy).monospacedDigit())
+                .font(.system(size: 14, weight: .semibold).monospacedDigit())
                 .foregroundColor(HCTheme.textPrimary)
                 .lineLimit(1)
         }
@@ -187,16 +188,14 @@ struct PopoverView: View {
                     activeTab = tab
                 } label: {
                     Text(tab.rawValue)
-                        .font(.system(size: 12, weight: .heavy))
-                        .foregroundColor(selected ? .black : HCTheme.textSecondary)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(selected ? HCTheme.accent : HCTheme.textMuted)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(
-                            Capsule().fill(selected ? Color.white : HCTheme.card)
+                            Capsule().fill(selected ? HCTheme.cardElevated : Color.clear)
                         )
-                        .overlay(
-                            Capsule().stroke(selected ? Color.white : HCTheme.border, lineWidth: 1)
-                        )
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -215,12 +214,7 @@ struct PopoverView: View {
     private var filteredEntries: [EntrySnapshot] {
         // Hide initial-error entries (never acquired quota/balance) from the menu bar list;
         // entries that had quota/balance and later became abnormal (stale/error) remain shown.
-        let visible = (state.snapshot?.entries ?? []).filter { !$0.isInitialError }
-        switch activeTab {
-        case .all, .prefs: return visible
-        case .sub: return visible.filter { $0.kind == "subscription" }
-        case .bal: return visible.filter { $0.kind == "balance" }
-        }
+        (state.snapshot?.entries ?? []).filter { !$0.isInitialError && activeTab.includes($0) }
     }
 
     private var entriesScrollList: some View {
@@ -229,7 +223,7 @@ struct PopoverView: View {
                 if let err = state.errorMessage, state.snapshot == nil {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("未连接到本地/内网 SubBar Server")
-                            .font(.system(size: 13.5, weight: .heavy))
+                            .font(.system(size: 13.5, weight: .semibold))
                             .foregroundColor(HCTheme.crit)
                         Text(err)
                             .font(.system(size: 12, weight: .medium))
@@ -245,7 +239,25 @@ struct PopoverView: View {
                     .overlay(RoundedRectangle(cornerRadius: 11).stroke(HCTheme.crit, lineWidth: 1.5))
                 } else {
                     discoverBanner
-                    if filteredEntries.isEmpty {
+                    let pending = initialErrorEntries.filter(activeTab.includes)
+                    if !pending.isEmpty {
+                        Button {
+                            activeTab = .prefs
+                        } label: {
+                            HStack {
+                                MaterialIcon.warning.label("\(pending.count) 个入口首次同步失败")
+                                Spacer()
+                                Text("查看原因")
+                            }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(HCTheme.warn)
+                            .padding(10)
+                            .background(HCTheme.card, in: RoundedRectangle(cornerRadius: 9))
+                        }.buttonStyle(.plain)
+                    }
+                    if state.snapshot == nil {
+                        ProgressView("正在获取订阅与余额…").padding()
+                    } else if filteredEntries.isEmpty && pending.isEmpty {
                         emptyPane
                     } else {
                         ForEach(filteredEntries) { item in
@@ -279,7 +291,7 @@ struct PopoverView: View {
         if !pending.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 Text("检测到本机已登录账号（可免浏览器一键同步）：")
-                    .font(.system(size: 11.5, weight: .bold))
+                    .font(.system(size: 11.5, weight: .medium))
                     .foregroundColor(HCTheme.accent)
                 ForEach(pending) { hint in
                     Button {
@@ -293,8 +305,8 @@ struct PopoverView: View {
                         }
                     } label: {
                         HStack {
-                            Text("⚡ 一键同步 \(hint.suggestedName)")
-                                .font(.system(size: 12, weight: .bold))
+                            MaterialIcon.link.label("同步 \(hint.suggestedName)")
+                                .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(HCTheme.textPrimary)
                             Spacer()
                         }
@@ -314,10 +326,10 @@ struct PopoverView: View {
 
     private var emptyPane: some View {
         VStack(spacing: 10) {
-            Text("暂无监控入口")
-                .font(.system(size: 15, weight: .heavy))
+            Text(activeTab == .all ? "还没有订阅或余额" : "暂无\(activeTab.rawValue)")
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(HCTheme.textPrimary)
-            Text("支持点击链接一键授权接入 Antigravity (agy)、Codex、Claude、Kimi 会员（支持微信扫码），也支持独立添加 DeepSeek、OpenRouter、Moonshot、硅基流动、中转站及周期会员。")
+            Text("添加账号后，即可查看订阅用量、下次重置时间或 API 可用余额。")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(HCTheme.textMuted)
                 .multilineTextAlignment(.center)
@@ -325,9 +337,9 @@ struct PopoverView: View {
                 editingEntryID = nil
                 showEditor = true
             } label: {
-                Text("+ 添加第一个订阅/余额入口")
-                    .font(.system(size: 12.5, weight: .heavy))
-                    .foregroundColor(.black)
+                MaterialIcon.add.label("添加订阅或余额")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundColor(HCTheme.bg)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .background(RoundedRectangle(cornerRadius: 8).fill(HCTheme.accent))
@@ -345,9 +357,57 @@ struct PopoverView: View {
     private var preferencesPane: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                if !initialErrorEntries.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("首次同步失败 (\(initialErrorEntries.count))")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundColor(HCTheme.textSecondary)
+                        Text("检查账号设置或重试同步。成功取得数据后，入口会自动出现在列表中。")
+                            .font(.system(size: 11))
+                            .foregroundColor(HCTheme.textMuted)
+                        ForEach(initialErrorEntries) { item in
+                            HStack(spacing: 8) {
+                                Text(item.badge)
+                                    .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                    .foregroundColor(HCTheme.textPrimary)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(RoundedRectangle(cornerRadius: 5).fill(HCTheme.cardElevated))
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(item.name)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(HCTheme.textPrimary)
+                                        .lineLimit(1)
+                                    if let err = item.error, !err.isEmpty {
+                                        Text(err)
+                                            .font(.system(size: 10.5))
+                                            .foregroundColor(HCTheme.crit)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer()
+                                IconButton(icon: .refresh, title: "重试同步 \(item.name)") {
+                                    Task { await state.triggerRefreshOne(id: item.id, name: item.name) }
+                                }
+                                IconButton(icon: .edit, title: "编辑 \(item.name)") {
+                                    editingEntryID = item.id
+                                    showEditor = true
+                                }
+                            }
+                            .padding(8)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(HCTheme.bg))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(HCTheme.border, lineWidth: 1))
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(HCTheme.card))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(HCTheme.border, lineWidth: 1.2))
+                }
+
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("菜单栏状态栏样式")
-                        .font(.system(size: 12.5, weight: .heavy))
+                    Text("菜单栏显示方式")
+                        .font(.system(size: 12.5, weight: .semibold))
                         .foregroundColor(HCTheme.textSecondary)
                     Picker("", selection: $state.menuBarStyle) {
                         ForEach(MenuBarDisplayStyle.allCases) { style in
@@ -356,7 +416,7 @@ struct PopoverView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.radioGroup)
-                    Text("提示：点击任意卡片上的 📌 即可将其置顶到 Mac 顶部菜单栏（双行模式最多同时展示前 2 个置顶项，含周/月限额的订阅会自动以「5h/周」双指标紧凑展示）。")
+                    Text("点击卡片上的图钉可在菜单栏显示该账号。双行模式最多显示两个账号。")
                         .font(.system(size: 11.5))
                         .foregroundColor(HCTheme.textMuted)
                 }
@@ -366,19 +426,19 @@ struct PopoverView: View {
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(HCTheme.border, lineWidth: 1.2))
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("内网 / 本机 Server 连接")
-                        .font(.system(size: 12.5, weight: .heavy))
+                    Text("服务连接")
+                        .font(.system(size: 12.5, weight: .semibold))
                         .foregroundColor(HCTheme.textSecondary)
                     TextField("http://127.0.0.1:8328", text: $state.serverURL)
                         .textFieldStyle(.roundedBorder)
                     HStack {
                         Text("客户端同步间隔 (秒):")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundColor(HCTheme.textSecondary)
                         Stepper("\(state.pollSeconds)s", value: $state.pollSeconds, in: 10...300, step: 10)
-                            .font(.system(size: 12, weight: .bold).monospacedDigit())
+                            .font(.system(size: 12, weight: .medium).monospacedDigit())
                         Spacer()
-                        Button("重连校验") {
+                        Button("重新连接") {
                             Task { await state.loadAll() }
                         }
                         .buttonStyle(.borderedProminent)
@@ -395,7 +455,7 @@ struct PopoverView: View {
                         set: { state.setLaunchAtLogin($0) }
                     )) {
                         Text("登录 macOS 时自动启动菜单栏")
-                            .font(.system(size: 12.5, weight: .bold))
+                            .font(.system(size: 12.5, weight: .medium))
                             .foregroundColor(HCTheme.textPrimary)
                     }
                     Spacer()
@@ -404,70 +464,7 @@ struct PopoverView: View {
                 .background(RoundedRectangle(cornerRadius: 10).fill(HCTheme.card))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(HCTheme.border, lineWidth: 1.2))
 
-                if !initialErrorEntries.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("初始异常已隐藏项 (\(initialErrorEntries.count))")
-                            .font(.system(size: 12.5, weight: .heavy))
-                            .foregroundColor(HCTheme.textSecondary)
-                        Text("以下入口尚未成功获取过初始额度/余额，已自动从顶部状态栏与主列表中隐藏；获取过额度后若出现异常则会在主列表正常告警。")
-                            .font(.system(size: 11))
-                            .foregroundColor(HCTheme.textMuted)
-                        ForEach(initialErrorEntries) { item in
-                            HStack(spacing: 8) {
-                                Text(item.badge)
-                                    .font(.system(size: 10.5, weight: .black, design: .monospaced))
-                                    .foregroundColor(HCTheme.textPrimary)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(RoundedRectangle(cornerRadius: 5).fill(HCTheme.cardElevated))
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(item.name)
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundColor(HCTheme.textPrimary)
-                                        .lineLimit(1)
-                                    if let err = item.error, !err.isEmpty {
-                                        Text(err)
-                                            .font(.system(size: 10.5))
-                                            .foregroundColor(HCTheme.crit)
-                                            .lineLimit(1)
-                                    }
-                                }
-                                Spacer()
-                                Button {
-                                    Task { await state.triggerRefreshOne(id: item.id, name: item.name) }
-                                } label: {
-                                    Text("↻")
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundColor(HCTheme.textPrimary)
-                                        .frame(width: 24, height: 24)
-                                        .background(RoundedRectangle(cornerRadius: 6).fill(HCTheme.cardElevated))
-                                }
-                                .buttonStyle(.plain)
-                                .help("重试拉取")
 
-                                Button {
-                                    editingEntryID = item.id
-                                    showEditor = true
-                                } label: {
-                                    Text("✎")
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundColor(HCTheme.textPrimary)
-                                        .frame(width: 24, height: 24)
-                                        .background(RoundedRectangle(cornerRadius: 6).fill(HCTheme.cardElevated))
-                                }
-                                .buttonStyle(.plain)
-                                .help("编辑或删除")
-                            }
-                            .padding(8)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(HCTheme.bg))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(HCTheme.border, lineWidth: 1))
-                        }
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(HCTheme.card))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(HCTheme.border, lineWidth: 1.2))
-                }
             }
             .padding(12)
         }
@@ -482,8 +479,8 @@ struct PopoverView: View {
                     NSWorkspace.shared.open(url)
                 }
             } label: {
-                Text("打开 Web 完整面板 ↗")
-                    .font(.system(size: 12, weight: .bold))
+                MaterialIcon.open.label("打开 Web 面板", size: 14)
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(HCTheme.accent)
             }
             .buttonStyle(.plain)
@@ -494,7 +491,7 @@ struct PopoverView: View {
                 NSApplication.shared.terminate(nil)
             } label: {
                 Text("退出")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(HCTheme.textMuted)
             }
             .buttonStyle(.plain)
@@ -521,7 +518,7 @@ struct EntryCardView: View {
             // Card Header
             HStack(alignment: .top, spacing: 8) {
                 Text(item.badge)
-                    .font(.system(size: 11, weight: .black, design: .monospaced))
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .foregroundColor(HCTheme.textPrimary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
@@ -531,12 +528,12 @@ struct EntryCardView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
                         Text(item.name)
-                            .font(.system(size: 13.5, weight: .heavy))
+                            .font(.system(size: 13.5, weight: .semibold))
                             .foregroundColor(HCTheme.textPrimary)
                             .lineLimit(1)
                         if let plan = item.planLabel, !plan.isEmpty {
                             Text(plan)
-                                .font(.system(size: 10.5, weight: .bold))
+                                .font(.system(size: 10.5, weight: .medium))
                                 .foregroundColor(HCTheme.textSecondary)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1)
@@ -556,35 +553,9 @@ struct EntryCardView: View {
                 Spacer()
 
                 HStack(spacing: 4) {
-                    Button(action: onTogglePin) {
-                        Text(item.pinned ? "📌" : "📍")
-                            .font(.system(size: 11.5))
-                            .opacity(item.pinned ? 1.0 : 0.45)
-                            .frame(width: 24, height: 24)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(HCTheme.cardElevated))
-                    }
-                    .buttonStyle(.plain)
-                    .help(item.pinned ? "取消状态栏置顶" : "置顶到 Mac 菜单栏")
-
-                    Button(action: onRefresh) {
-                        Text("↻")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(HCTheme.textPrimary)
-                            .frame(width: 24, height: 24)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(HCTheme.cardElevated))
-                    }
-                    .buttonStyle(.plain)
-                    .help("刷新此项")
-
-                    Button(action: onEdit) {
-                        Text("✎")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(HCTheme.textPrimary)
-                            .frame(width: 24, height: 24)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(HCTheme.cardElevated))
-                    }
-                    .buttonStyle(.plain)
-                    .help("编辑此入口")
+                    IconButton(icon: .pin, title: item.pinned ? "取消菜单栏置顶" : "置顶到菜单栏", selected: item.pinned, action: onTogglePin)
+                    IconButton(icon: .refresh, title: "刷新 \(item.name)", action: onRefresh)
+                    IconButton(icon: .edit, title: "编辑 \(item.name)", action: onEdit)
                 }
             }
 
@@ -602,12 +573,12 @@ struct EntryCardView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(String(format: "%@%.2f", bal.symbol, bal.available))
-                            .font(.system(size: 22, weight: .black).monospacedDigit())
-                            .foregroundColor(HCTheme.statusColor(item.status == "ok" ? "ok" : item.status))
+                            .font(.system(size: 22, weight: .bold).monospacedDigit())
+                            .foregroundColor(HCTheme.textPrimary)
                         Spacer()
                         if let lim = bal.limit, lim > 0 {
                             Text(String(format: "总额 %@%.2f", bal.symbol, lim))
-                                .font(.system(size: 11.5, weight: .bold).monospacedDigit())
+                                .font(.system(size: 11.5, weight: .medium).monospacedDigit())
                                 .foregroundColor(HCTheme.textMuted)
                         }
                     }
@@ -615,7 +586,7 @@ struct EntryCardView: View {
                         HStack(spacing: 6) {
                             ForEach(details.prefix(3)) { d in
                                 Text("\(d.label) \(d.value)")
-                                    .font(.system(size: 11, weight: .bold).monospacedDigit())
+                                    .font(.system(size: 11, weight: .medium).monospacedDigit())
                                     .foregroundColor(HCTheme.textSecondary)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2.5)
@@ -650,8 +621,8 @@ struct EntryCardView: View {
                     Button {
                         NSWorkspace.shared.open(url)
                     } label: {
-                        Text("官网 ↗")
-                            .font(.system(size: 11, weight: .bold))
+                        MaterialIcon.open.label("官网", size: 13)
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundColor(HCTheme.accent)
                     }
                     .buttonStyle(.plain)
@@ -695,28 +666,28 @@ struct EntryCardView: View {
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(w.label)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(HCTheme.textSecondary)
                 Spacer()
                 Text(metricText)
-                    .font(.system(size: 12, weight: .heavy).monospacedDigit())
+                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
                     .foregroundColor(HCTheme.textPrimary)
             }
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.black.opacity(0.45))
+                        .fill(HCTheme.bg)
                         .overlay(Capsule().stroke(HCTheme.border, lineWidth: 1.2))
                     Capsule()
                         .fill(barColor)
-                        .frame(width: max(4, geo.size.width * CGFloat(max(0, min(100, shownPct)) / 100.0)))
+                        .frame(width: geo.size.width * CGFloat(max(0, min(100, shownPct)) / 100.0))
 
                     if let pace = w.paceDeltaPercent {
                         let elapsed = max(0, min(100, w.usedPercent - pace))
                         let markerPct = showRemaining ? (100 - elapsed) : elapsed
                         Rectangle()
-                            .fill(Color.white)
+                            .fill(HCTheme.textPrimary)
                             .frame(width: 2, height: geo.size.height)
                             .offset(x: geo.size.width * CGFloat(markerPct / 100.0))
                     }
@@ -734,7 +705,7 @@ struct EntryCardView: View {
                 Spacer()
                 if let pace = w.paceDeltaPercent {
                     Text(pace > 8 ? String(format: "超前 +%.0f%%", pace) : "节奏稳健")
-                        .font(.system(size: 11, weight: .bold).monospacedDigit())
+                        .font(.system(size: 11, weight: .medium).monospacedDigit())
                         .foregroundColor(pace > 8 ? HCTheme.warn : HCTheme.ok)
                 }
             }

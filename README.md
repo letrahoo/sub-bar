@@ -11,7 +11,7 @@ A macOS menu bar app that shows your AI subscription quotas and API balances at 
 
 ## Install
 
-Download `SubBar-macOS.zip` from [Releases](../../releases) (Apple Silicon and Intel), unzip, and move `SubBar.app` to Applications.
+Download `SubBar-macOS.zip` from [Releases](../../releases) (Apple Silicon and Intel), unzip, and move `SubBar.app` to Applications. To build a DMG locally, run `make all` and open `dist/SubBar-macOS.dmg`.
 
 The build is ad-hoc signed and not notarized. Right-click → Open on first launch, or:
 
@@ -54,4 +54,4 @@ Requires Go 1.22+ and Xcode command line tools. Pushing a `v*` tag builds and pu
 
 ## License
 
-MIT
+SubBar is MIT licensed. [Google Material Icons](https://github.com/google/material-design-icons) are bundled locally under [Apache 2.0](server/internal/web/static/material-icons.LICENSE.txt).

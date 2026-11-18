@@ -200,7 +200,7 @@ struct EntryEditorView: View {
                             }
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(.red)
+                        .tint(HCTheme.crit)
                     } else {
                         Button("删除") { confirmDelete = true }
                             .foregroundColor(HCTheme.crit)
@@ -224,6 +224,7 @@ struct EntryEditorView: View {
         }
         .frame(width: 392, height: 520)
         .background(HCTheme.bg)
+        .tint(HCTheme.accent)
         .preferredColorScheme(.dark)
         .onAppear { populateInitial() }
         .onDisappear { stopPolling() }
@@ -235,7 +236,7 @@ struct EntryEditorView: View {
         VStack(alignment: .leading, spacing: 9) {
             if let cfg = existingConfig, cfg.hasSecret {
                 HStack(spacing: 6) {
-                    Text("✓ 已绑定授权")
+                    MaterialIcon.check.label("已授权")
                         .font(.system(size: 12, weight: .heavy))
                         .foregroundColor(HCTheme.ok)
                     if let em = cfg.accountEmail, !em.isEmpty {
@@ -259,10 +260,10 @@ struct EntryEditorView: View {
 
             let primaryLabel: String = {
                 if existingConfig?.hasSecret == true {
-                    return isStartingOAuth ? "正在生成链接…" : "🔗 重新登录授权 / 切换账号"
+                    return isStartingOAuth ? "正在生成链接…" : "重新登录授权 / 切换账号"
                 }
                 let base = currentDescriptor?.oauthButtonLabel ?? "打开浏览器授权链接"
-                return isStartingOAuth ? "正在生成链接…" : "🔗 \(base)"
+                return isStartingOAuth ? "正在生成链接…" : "\(base)"
             }()
 
             Button {
@@ -270,9 +271,9 @@ struct EntryEditorView: View {
             } label: {
                 HStack {
                     Spacer()
-                    Text(primaryLabel)
+                    MaterialIcon.link.label(primaryLabel)
                         .font(.system(size: 13, weight: .heavy))
-                        .foregroundColor(.black)
+                        .foregroundColor(HCTheme.bg)
                     Spacer()
                 }
                 .padding(.vertical, 8)
@@ -288,7 +289,7 @@ struct EntryEditorView: View {
                             NSWorkspace.shared.open(u)
                         }
                     } label: {
-                        Text("↗ 再次打开浏览器")
+                        MaterialIcon.open.label("再次打开浏览器", size: 14)
                             .font(.system(size: 11.5, weight: .bold))
                             .foregroundColor(HCTheme.textPrimary)
                             .padding(.horizontal, 9)
