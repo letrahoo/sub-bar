@@ -107,6 +107,32 @@ struct EntrySnapshot: Codable, Identifiable {
         !hasQuotaOrBalance && status == "error"
     }
 
+    // When the compact title has two percentages, the gauge represents the first.
+    private var menuWindows: [QuotaWindow] {
+        let quota = (windows ?? []).filter { $0.key != "cycle" }
+        func mostUsed(_ list: [QuotaWindow]) -> QuotaWindow? {
+            list.max { $0.usedPercent < $1.usedPercent }
+        }
+        if let short = mostUsed(quota.filter { ($0.windowSeconds ?? 18000) <= 86400 }),
+           let long = mostUsed(quota.filter { ($0.windowSeconds ?? 0) >= 5 * 86400 }) {
+            return [short, long]
+        }
+        return mostUsed(quota).map { [$0] } ?? []
+    }
+
+    func menuGaugeFraction(showRemaining: Bool) -> Double? {
+        let fraction: Double
+        if kind == "balance", let b = balance {
+            guard let limit = b.limit, limit > 0 else { return nil }
+            fraction = b.available / limit
+        } else if let w = menuWindows.first {
+            fraction = (showRemaining ? w.remainingPercent : w.usedPercent) / 100
+        } else if let cycle = windows?.first(where: { $0.key == "cycle" }) {
+            fraction = cycle.usedPercent / 100
+        } else { return nil }
+        return max(0, min(1, fraction))
+    }
+
     func barCompactValue(showRemaining: Bool) -> String {
         if !enabled { return "OFF" }
         if !hasQuotaOrBalance && status == "error" { return "ERR" }
@@ -117,34 +143,8 @@ struct EntrySnapshot: Codable, Identifiable {
             }
             return String(format: "%@%.1f%@", b.symbol, b.available, abnormalMark)
         }
-        if let wins = windows, !wins.isEmpty {
-            let nonCycle = wins.filter { $0.key != "cycle" }
-            if nonCycle.isEmpty {
-                return primaryMetric + abnormalMark
-            }
-            let shortWins = nonCycle.filter { ($0.windowSeconds ?? 18000) <= 86400 }
-            let longWins = nonCycle.filter { ($0.windowSeconds ?? 0) >= 5 * 86400 }
-
-            func mostConsumed(_ list: [QuotaWindow]) -> QuotaWindow? {
-                guard var best = list.first else { return nil }
-                for item in list.dropFirst() where item.usedPercent > best.usedPercent {
-                    best = item
-                }
-                return best
-            }
-
-            if let sw = mostConsumed(shortWins), let lw = mostConsumed(longWins) {
-                let sv = showRemaining ? sw.remainingPercent : sw.usedPercent
-                let lv = showRemaining ? lw.remainingPercent : lw.usedPercent
-                return String(format: "%.0f%%/%.0f%%%@", sv, lv, abnormalMark)
-            }
-
-            if let w = mostConsumed(nonCycle) {
-                let v = showRemaining ? w.remainingPercent : w.usedPercent
-                return String(format: "%.0f%%%@", v, abnormalMark)
-            }
-        }
-        return primaryMetric + abnormalMark
+        let readings = menuWindows.map { String(format: "%.0f%%", showRemaining ? $0.remainingPercent : $0.usedPercent) }
+        return (readings.isEmpty ? primaryMetric : readings.joined(separator: "/")) + abnormalMark
     }
 }
 
@@ -264,19 +264,23 @@ struct OAuthStatusResponse: Codable {
     let snapshot: EntrySnapshot?
 }
 
-// High-Contrast Palette (tailored for maximum legibility)
+// Everforest Dark: warm gold for actions, forest green for healthy usage.
 enum HCTheme {
-    static let bg = Color(red: 0.024, green: 0.035, blue: 0.055)          // #06090E
-    static let card = Color(red: 0.067, green: 0.094, blue: 0.137)        // #111823
-    static let cardElevated = Color(red: 0.102, green: 0.141, blue: 0.20) // #1A2433
-    static let border = Color(red: 0.24, green: 0.31, blue: 0.41)         // #3D4F69
-    static let textPrimary = Color.white
-    static let textSecondary = Color(red: 0.89, green: 0.92, blue: 0.96)  // #E3EBF5
-    static let textMuted = Color(red: 0.76, green: 0.82, blue: 0.89)      // #C2D1E3
-    static let accent = Color(red: 0.176, green: 0.831, blue: 0.749)      // #2DD4BF
-    static let ok = Color(red: 0.133, green: 0.773, blue: 0.369)          // #22C55E
-    static let warn = Color(red: 0.984, green: 0.749, blue: 0.141)        // #FBBF24
-    static let crit = Color(red: 0.973, green: 0.443, blue: 0.443)        // #F87171
+    private static func rgb(_ hex: UInt32) -> Color {
+        Color(.sRGB, red: Double(hex >> 16) / 255, green: Double((hex >> 8) & 255) / 255, blue: Double(hex & 255) / 255)
+    }
+
+    static let bg = rgb(0x2d353b)
+    static let card = rgb(0x343f44)
+    static let cardElevated = rgb(0x3d484d)
+    static let border = rgb(0x56635d)
+    static let textPrimary = rgb(0xd3c6aa)
+    static let textSecondary = rgb(0xc1c7b5)
+    static let textMuted = rgb(0xa2afa1)
+    static let accent = rgb(0xe6c384)
+    static let ok = rgb(0x83c995)
+    static let warn = rgb(0xe69875)
+    static let crit = rgb(0xe67e80)
 
     static func statusColor(_ status: String) -> Color {
         switch status {

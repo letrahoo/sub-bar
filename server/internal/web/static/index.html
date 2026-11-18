@@ -13,7 +13,7 @@
     <header class="topbar">
       <div class="brand-row">
         <div class="brand-title-wrap">
-          <span class="brand-mark" aria-hidden="true">⚡</span>
+          <span class="brand-mark" aria-hidden="true"><svg class="icon" aria-hidden="true" focusable="false"><use href="/material-icons.svg#bar_chart"></use></svg></span>
           <div>
             <h1 class="brand-title">订阅与余额</h1>
             <p class="brand-sub" id="updated-text">正在同步…</p>
@@ -21,9 +21,9 @@
         </div>
         <div class="top-actions">
           <button type="button" class="icon-btn" id="btn-mode" title="切换显示剩余/已用">看剩余</button>
-          <button type="button" class="icon-btn" id="btn-theme" title="切换高对比明暗主题" aria-label="切换主题">☀</button>
-          <button type="button" class="btn btn-secondary" id="btn-refresh">↻ 刷新</button>
-          <button type="button" class="btn btn-primary" id="btn-add">+ 添加入口</button>
+          <button type="button" class="icon-btn" id="btn-theme" title="切换到浅色主题" aria-label="切换到浅色主题"><svg class="icon" aria-hidden="true" focusable="false"><use href="/material-icons.svg#light_mode"></use></svg></button>
+          <button type="button" class="btn btn-secondary" id="btn-refresh"><svg class="icon" aria-hidden="true" focusable="false"><use href="/material-icons.svg#refresh"></use></svg> <span id="refresh-label">刷新</span></button>
+          <button type="button" class="btn btn-primary" id="btn-add" disabled><svg class="icon" aria-hidden="true" focusable="false"><use href="/material-icons.svg#add"></use></svg> 添加入口</button>
         </div>
       </div>
 
@@ -42,16 +42,21 @@
         </div>
       </section>
 
-      <nav class="filter-tabs" role="tablist" aria-label="分类筛选">
-        <button type="button" class="tab active" data-filter="all">全部 <span id="cnt-all">0</span></button>
-        <button type="button" class="tab" data-filter="subscription">订阅配额 <span id="cnt-sub">0</span></button>
-        <button type="button" class="tab" data-filter="balance">API 余额 <span id="cnt-bal">0</span></button>
+      <nav class="filter-tabs" role="group" aria-label="分类筛选">
+        <button type="button" class="tab active" aria-pressed="true" data-filter="all">全部 <span id="cnt-all">0</span></button>
+        <button type="button" class="tab" aria-pressed="false" data-filter="subscription">订阅配额 <span id="cnt-sub">0</span></button>
+        <button type="button" class="tab" aria-pressed="false" data-filter="balance">API 余额 <span id="cnt-bal">0</span></button>
       </nav>
     </header>
 
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
     <section id="discover-box" class="discover-box hidden" aria-label="本机发现快捷入口"></section>
+
+    <section id="load-error" class="load-error hidden" aria-label="同步失败">
+      <span id="load-error-text" role="status"></span>
+      <button type="button" class="btn" id="btn-retry"><svg class="icon" aria-hidden="true" focusable="false"><use href="/material-icons.svg#refresh"></use></svg> 重新加载</button>
+    </section>
 
     <main id="cards-container" class="cards-grid" aria-live="polite"></main>
   </div>
@@ -61,7 +66,7 @@
     <div class="modal-sheet">
       <div class="modal-header">
         <h2 id="modal-title">添加订阅 / 余额入口</h2>
-        <button type="button" class="icon-btn" id="modal-close" aria-label="关闭">✕</button>
+        <button type="button" class="icon-btn" id="modal-close" aria-label="关闭"><svg class="icon" aria-hidden="true" focusable="false"><use href="/material-icons.svg#close"></use></svg></button>
       </div>
       <form id="entry-form" class="modal-body" autocomplete="off">
         <input type="hidden" id="f-id">
@@ -86,7 +91,7 @@
         <div id="oauth-panel" class="oauth-panel hidden">
           <div id="oauth-bound-banner" class="oauth-bound hidden"></div>
           <div class="oauth-start-row">
-            <button type="button" class="btn btn-primary oauth-cta" id="btn-oauth-start">🔗 生成授权链接并登录</button>
+            <button type="button" class="btn btn-primary oauth-cta" id="btn-oauth-start"><svg class="icon" aria-hidden="true" focusable="false"><use href="/material-icons.svg#link"></use></svg> <span id="oauth-start-label">生成授权链接并登录</span></button>
           </div>
           <details id="oauth-client-box" class="oauth-paste-box">
             <summary id="oauth-client-summary">OAuth 客户端凭据（需自行填写，仅保存在本机）</summary>
@@ -103,7 +108,7 @@
           </details>
           <div id="oauth-session-box" class="oauth-session hidden">
             <div class="oauth-link-actions">
-              <a id="oauth-open-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">↗ 点此打开浏览器授权页</a>
+              <a id="oauth-open-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary"><svg class="icon" aria-hidden="true" focusable="false"><use href="/material-icons.svg#open_in_new"></use></svg> 打开授权页</a>
               <button type="button" class="btn btn-secondary" id="btn-oauth-copy">复制链接</button>
             </div>
             <div class="oauth-polling-bar" id="oauth-polling-bar">
@@ -203,7 +208,7 @@
     <div class="modal-sheet modal-sheet-sm">
       <div class="modal-header">
         <h2 id="quick-title">快捷更新数值</h2>
-        <button type="button" class="icon-btn" id="quick-close" aria-label="关闭">✕</button>
+        <button type="button" class="icon-btn" id="quick-close" aria-label="关闭"><svg class="icon" aria-hidden="true" focusable="false"><use href="/material-icons.svg#close"></use></svg></button>
       </div>
       <form id="quick-form" class="modal-body">
         <input type="hidden" id="q-id">

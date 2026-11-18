@@ -11,7 +11,7 @@
 
 ## 安装
 
-在 [Releases](../../releases) 下载 `SubBar-macOS.zip`（支持 Apple Silicon 和 Intel），解压后把 `SubBar.app` 拖入「应用程序」。
+在 [Releases](../../releases) 下载 `SubBar-macOS.zip`（支持 Apple Silicon 和 Intel），解压后把 `SubBar.app` 拖入「应用程序」。如需本地构建 DMG，运行 `make all` 后打开 `dist/SubBar-macOS.dmg`。
 
 构建产物为 ad-hoc 签名，未公证。首次打开请右键选择「打开」，或执行：
 
@@ -54,4 +54,4 @@ make all    # 生成 dist/subbar-server 与 dist/SubBar.app
 
 ## 许可证
 
-MIT
+SubBar 使用 MIT 许可证。随应用离线打包的 [Google Material Icons](https://github.com/google/material-design-icons) 使用 [Apache 2.0 许可证](server/internal/web/static/material-icons.LICENSE.txt)。

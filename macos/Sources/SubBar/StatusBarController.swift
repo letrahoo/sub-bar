@@ -107,7 +107,12 @@ final class StatusBarController: NSObject {
         let pinned = activeEntries.filter { $0.pinned }
         let topTargets = Array((pinned.isEmpty ? activeEntries : pinned).prefix(2))
 
-        let overallSeverity = computeOverallSeverity(activeEntries)
+        let disconnected = appState.errorMessage != nil
+        let overallSeverity = disconnected ? "error" : computeOverallSeverity(activeEntries)
+        let summary = topTargets.map { "\($0.name) · \($0.barCompactValue(showRemaining: appState.showRemaining))" }
+        let description = ([disconnected ? "SubBar · 服务未连接" : "SubBar · 订阅与余额"] + summary).joined(separator: "\n")
+        button.toolTip = description
+        button.setAccessibilityLabel(description)
 
         if appState.errorMessage != nil && appState.snapshot == nil {
             button.image = drawIconWithDot(severity: "error")
@@ -164,12 +169,7 @@ final class StatusBarController: NSObject {
     }
 
     private func nsStatusColor(_ severity: String) -> NSColor {
-        switch severity {
-        case "critical", "error": return NSColor(srgbRed: 0.98, green: 0.36, blue: 0.36, alpha: 1.0)
-        case "warning", "stale": return NSColor(srgbRed: 0.98, green: 0.75, blue: 0.14, alpha: 1.0)
-        case "ok": return NSColor(srgbRed: 0.18, green: 0.83, blue: 0.45, alpha: 1.0)
-        default: return NSColor.secondaryLabelColor
-        }
+        severity == "idle" ? .secondaryLabelColor : NSColor(HCTheme.statusColor(severity))
     }
 
     private func monoTitle(_ str: String) -> NSAttributedString {
@@ -183,21 +183,17 @@ final class StatusBarController: NSObject {
     private func drawIconWithDot(severity: String) -> NSImage {
         let size = NSSize(width: 20, height: 18)
         let img = NSImage(size: size, flipped: false) { _ in
-            let fg = NSColor.labelColor
-            fg.setStroke()
-            fg.setFill()
-
-            // Crisp stacked-bars glyph
-            let bars: [(CGFloat, CGFloat)] = [(3, 13), (8, 9), (13, 11)]
-            for (y, w) in bars {
-                let path = NSBezierPath(roundedRect: NSRect(x: 2, y: y, width: w, height: 2.5), xRadius: 1.2, yRadius: 1.2)
-                path.fill()
+            // Pixel-aligned Material bar_chart silhouette. Use system ink so the
+            // mark follows the menu bar appearance independently of the dark popover.
+            NSColor.labelColor.setFill()
+            for (x, h): (CGFloat, CGFloat) in [(1, 9), (6, 14), (11, 6)] {
+                NSBezierPath(rect: NSRect(x: x, y: 2, width: 3, height: h)).fill()
             }
 
-            // Status dot bottom-right
+            // Separate the indicator from the bars at small sizes.
             let dotColor = self.nsStatusColor(severity)
             dotColor.setFill()
-            let dot = NSBezierPath(ovalIn: NSRect(x: 13.5, y: 2.0, width: 5.0, height: 5.0))
+            let dot = NSBezierPath(ovalIn: NSRect(x: 15.5, y: 2, width: 4.5, height: 4.5))
             dot.fill()
             return true
         }
@@ -259,10 +255,9 @@ final class StatusBarController: NSObject {
         let totalW = barW + 7 + ceil(textSize.width) + 4
         let height: CGFloat = 20
 
-        var fillRatio: CGFloat = 1.0
-        if let w = entry.windows?.first(where: { $0.key != "cycle" }) ?? entry.windows?.first {
-            let pct = showRemaining ? w.remainingPercent : w.usedPercent
-            fillRatio = CGFloat(max(0.06, min(1.0, pct / 100.0)))
+        guard let fraction = entry.menuGaugeFraction(showRemaining: showRemaining) else {
+            // An absolute API balance has no denominator: show the amount, not a full gauge.
+            return drawStackedCodexBarImage(targets: [entry], showRemaining: showRemaining, severity: severity)
         }
 
         let img = NSImage(size: NSSize(width: totalW, height: height), flipped: false) { _ in
@@ -272,7 +267,7 @@ final class StatusBarController: NSObject {
             track.lineWidth = 1.2
             track.stroke()
 
-            let innerW = max(3, (barW - 2.4) * fillRatio)
+            let innerW = (barW - 2.4) * CGFloat(fraction)
             let fillRect = NSRect(x: 3.2, y: 6.7, width: innerW, height: 6.6)
             self.nsStatusColor(entry.status).setFill()
             NSBezierPath(roundedRect: fillRect, xRadius: 3.3, yRadius: 3.3).fill()

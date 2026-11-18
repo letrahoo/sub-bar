@@ -14,11 +14,37 @@
 
   const $ = (id) => document.getElementById(id);
 
+  // Symbol names are local constants; provider/account labels remain plain text nodes.
+  function icon(name) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'icon');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    const use = document.createElementNS(ns, 'use');
+    use.setAttribute('href', `/material-icons.svg#${name}`);
+    svg.appendChild(use);
+    return svg;
+  }
+
+  function cardAction(symbol, label) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mini-btn';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.appendChild(icon(symbol));
+    return btn;
+  }
+
   function applyTheme(t) {
     state.theme = t === 'light' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', state.theme);
     localStorage.setItem('subbar_theme', state.theme);
-    $('btn-theme').textContent = state.theme === 'dark' ? '☀' : '☾';
+    const btn = $('btn-theme');
+    btn.title = state.theme === 'dark' ? '切换到浅色主题' : '切换到深色主题';
+    btn.setAttribute('aria-label', btn.title);
+    btn.replaceChildren(icon(state.theme === 'dark' ? 'light_mode' : 'dark_mode'));
   }
 
   function applyModeButton() {
@@ -63,8 +89,15 @@
       state.snapshot = snapshot;
       state.discover = (discover && discover.hints) || [];
       renderAll();
+      $('btn-add').disabled = false;
+      $('load-error').classList.add('hidden');
+      return true;
     } catch (err) {
-      showToast(err.message || '加载失败');
+      if (!state.snapshot) $('updated-text').textContent = '尚未同步';
+      const message = state.snapshot ? '同步失败，仍显示上次的数据' : '无法加载监控入口';
+      $('load-error-text').textContent = `${message}：${err.message || '请检查服务连接'}`;
+      $('load-error').classList.remove('hidden');
+      return false;
     }
   }
 
@@ -119,8 +152,9 @@
   function renderAll() {
     if (!state.snapshot) return;
     const { summary, entries, generatedAt } = state.snapshot;
-    const visibleEntries = entries.filter((e) => !isInitialErrorEntry(e));
-    const enabledVisibleCount = visibleEntries.filter((e) => e.enabled).length;
+    const enabled = entries.filter((e) => e.enabled);
+    const initialErrorCount = enabled.filter(isInitialErrorEntry).length;
+    const enabledVisibleCount = enabled.length - initialErrorCount;
 
     $('updated-text').textContent = `最近同步 ${new Date(generatedAt).toLocaleTimeString('zh-CN', { hour12: false })}`;
     $('stat-balances').textContent = formatCurrencyTotals(summary.availableBalances);
@@ -129,15 +163,19 @@
     } else if (summary.warningCount > 0) {
       $('stat-health').textContent = `${summary.warningCount} 预警 / 共 ${enabledVisibleCount} 项`;
     } else {
-      $('stat-health').textContent = `${enabledVisibleCount} 项全部正常`;
+      $('stat-health').textContent = enabledVisibleCount ? `${enabledVisibleCount} 项正常` : '暂无可用监控数据';
+    }
+    if (initialErrorCount) {
+      const pending = `${initialErrorCount} 项首次同步失败`;
+      $('stat-health').textContent = enabledVisibleCount ? `${$('stat-health').textContent} · ${pending}` : pending;
     }
     $('stat-monthly').textContent = summary.monthlyFixedCosts && summary.monthlyFixedCosts.length > 0
       ? formatCurrencyTotals(summary.monthlyFixedCosts) + ' / 月'
       : '未设月费';
 
-    $('cnt-all').textContent = visibleEntries.length;
-    $('cnt-sub').textContent = visibleEntries.filter((e) => e.kind === 'subscription').length;
-    $('cnt-bal').textContent = visibleEntries.filter((e) => e.kind === 'balance').length;
+    $('cnt-all').textContent = entries.length;
+    $('cnt-sub').textContent = entries.filter((e) => e.kind === 'subscription').length;
+    $('cnt-bal').textContent = entries.filter((e) => e.kind === 'balance').length;
 
     renderDiscover(entries);
     renderCards(entries);
@@ -163,7 +201,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'btn';
-      btn.textContent = `⚡ 一键同步 ${h.suggestedName}`;
+      btn.append(icon('sync'), `一键同步 ${h.suggestedName}`);
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
@@ -190,6 +228,7 @@
 
   function renderCards(entries) {
     const container = $('cards-container');
+    const drawerWasOpen = container.querySelector('.initial-errors-drawer')?.open;
     container.innerHTML = '';
     const visible = entries.filter((e) => !isInitialErrorEntry(e));
     const initialErrors = entries.filter((e) => isInitialErrorEntry(e) && (state.filter === 'all' || e.kind === state.filter));
@@ -198,16 +237,27 @@
     if (filtered.length === 0 && initialErrors.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.innerHTML = `
-        <h2>还没有监控条目</h2>
-        <p>支持点击链接一键授权接入 Antigravity (agy)、OpenAI Codex、Claude、Kimi 会员（支持微信扫码登录），也支持独立添加 DeepSeek、Grok、OpenRouter、Moonshot、硅基流动、中转站或自定义周期订阅。</p>
-      `;
-      const addBtn = document.createElement('button');
-      addBtn.type = 'button';
-      addBtn.className = 'btn btn-primary';
-      addBtn.textContent = '+ 立即添加第一个入口';
-      addBtn.addEventListener('click', () => openEntryModal(null));
-      empty.appendChild(addBtn);
+      const isFiltered = entries.length > 0;
+      const kind = state.filter === 'balance' ? 'API 余额' : '订阅配额';
+      const heading = document.createElement('h2');
+      heading.textContent = isFiltered ? `还没有${kind}入口` : '还没有监控入口';
+      const hint = document.createElement('p');
+      hint.textContent = isFiltered ? '其他分类中还有入口，可以返回查看。' : '添加一个订阅或 API 余额入口，就能在这里查看用量和刷新状态。';
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'btn btn-primary';
+      if (isFiltered) {
+        action.textContent = '查看全部入口';
+        action.addEventListener('click', () => {
+          const all = document.querySelector('[data-filter="all"]');
+          all.click();
+          all.focus();
+        });
+      } else {
+        action.append(icon('add'), '添加第一个入口');
+        action.addEventListener('click', () => openEntryModal(null));
+      }
+      empty.append(heading, hint, action);
       container.appendChild(empty);
       return;
     }
@@ -219,8 +269,9 @@
     if (initialErrors.length > 0) {
       const details = document.createElement('details');
       details.className = 'initial-errors-drawer';
+      details.open = !!drawerWasOpen;
       const sum = document.createElement('summary');
-      sum.textContent = `已折叠 ${initialErrors.length} 个初始异常入口（尚未获取过额度/余额，展开可重试或删除）`;
+      sum.textContent = `${initialErrors.length} 个入口尚未取得额度或余额（可重试或编辑）`;
       details.appendChild(sum);
       const inner = document.createElement('div');
       inner.className = 'initial-errors-grid';
@@ -293,26 +344,17 @@
     actions.className = 'card-actions';
 
     if (item.provider === 'manual') {
-      const qBtn = document.createElement('button');
-      qBtn.type = 'button';
-      qBtn.className = 'mini-btn';
-      qBtn.title = '快捷调整额度/余额';
-      qBtn.textContent = '±';
+      const qBtn = cardAction('tune', `快捷调整额度/余额 · ${item.name}`);
       qBtn.addEventListener('click', () => openQuickModal(item));
       actions.appendChild(qBtn);
     }
 
-    const rBtn = document.createElement('button');
-    rBtn.type = 'button';
-    rBtn.className = 'mini-btn';
-    rBtn.title = '单独刷新此项';
-    rBtn.textContent = '↻';
+    const rBtn = cardAction('refresh', `单独刷新此项 · ${item.name}`);
     rBtn.addEventListener('click', async () => {
       rBtn.disabled = true;
       try {
         await api(`/api/entries/${encodeURIComponent(item.id)}/refresh`, { method: 'POST' });
-        await loadAll();
-        showToast(`已刷新 ${item.name}`);
+        if (await loadAll()) showToast(`已刷新 ${item.name}`);
       } catch (err) {
         showToast(err.message);
       } finally {
@@ -320,11 +362,7 @@
       }
     });
 
-    const eBtn = document.createElement('button');
-    eBtn.type = 'button';
-    eBtn.className = 'mini-btn';
-    eBtn.title = '编辑入口配置';
-    eBtn.textContent = '✎';
+    const eBtn = cardAction('edit', `编辑入口配置 · ${item.name}`);
     eBtn.addEventListener('click', () => openEntryModal(item.id));
 
     actions.appendChild(rBtn);
@@ -470,7 +508,7 @@
       a.href = item.dashboardUrl;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
-      a.textContent = '官网面板 ↗';
+      a.append('官网面板', icon('open_in_new'));
       foot.appendChild(a);
     }
     card.appendChild(foot);
@@ -545,9 +583,10 @@
     }
 
     const startBtn = $('btn-oauth-start');
-    const origText = startBtn.textContent;
+    const startLabel = $('oauth-start-label');
+    const origText = startLabel.textContent;
     startBtn.disabled = true;
-    startBtn.textContent = '正在创建授权会话…';
+    startLabel.textContent = '正在创建授权会话…';
 
     try {
       const sess = await api('/api/oauth/start', {
@@ -585,7 +624,7 @@
       showToast(err.message || '启动授权失败');
     } finally {
       startBtn.disabled = false;
-      startBtn.textContent = origText;
+      startLabel.textContent = origText;
     }
   }
 
@@ -597,7 +636,7 @@
         stopOAuthPolling();
         closeEntryModal();
         const label = (st.entry && st.entry.name) || st.accountEmail || '新账号';
-        showToast(`✓ 授权成功，已接入 ${label}`);
+        showToast(`授权成功，已接入 ${label}`);
         await loadAll();
       } else if (st.status === 'error' || st.status === 'expired') {
         stopOAuthPolling();
@@ -622,9 +661,9 @@
       $('oauth-client-secret').disabled = !st.needsSecret;
       $('oauth-client-id').value = '';
       $('oauth-client-id').placeholder = st.clientIdHint ? `client_id（已保存 ${st.clientIdHint}，留空保持不变）` : 'client_id（必填）';
-      $('oauth-client-summary').textContent = st.configured
-        ? '✓ OAuth 客户端凭据已配置（点击可更新）'
-        : '⚠ 请先填写 OAuth 客户端凭据（仅保存在本机）';
+      $('oauth-client-summary').replaceChildren(icon(st.configured ? 'check_circle' : 'warning'), st.configured
+        ? ' OAuth 客户端凭据已配置（点击可更新）'
+        : ' 请先填写 OAuth 客户端凭据（仅保存在本机）');
       box.open = !st.configured;
     } catch (_) {}
   }
@@ -669,14 +708,14 @@
         boundBanner.classList.remove('hidden');
         const emailPart = existingCfg.accountEmail ? ` · ${existingCfg.accountEmail}` : '';
         const refreshPart = existingCfg.hasRefreshToken ? ' · 自动续期' : '';
-        boundBanner.textContent = `✓ 已绑定授权凭证${emailPart}${refreshPart}`;
-        $('btn-oauth-start').textContent = `🔗 重新登录授权 / 切换账号`;
+        boundBanner.replaceChildren(icon('check_circle'), `已绑定授权凭证${emailPart}${refreshPart}`);
+        $('oauth-start-label').textContent = '重新登录授权 / 切换账号';
         saveBtn.classList.remove('hidden');
         nameInput.required = true;
         nameLabel.textContent = '显示名称 *';
       } else {
         boundBanner.classList.add('hidden');
-        $('btn-oauth-start').textContent = `🔗 ${btnLabel}`;
+        $('oauth-start-label').textContent = btnLabel;
         saveBtn.classList.toggle('hidden', !existingCfg);
         nameInput.required = false;
         nameInput.placeholder = `留空自动命名（如 ${desc.defaultBadge === 'AGY' ? 'Antigravity' : desc.name.split(' ')[0]} + 邮箱前缀）`;
@@ -829,19 +868,26 @@
   $('btn-refresh').addEventListener('click', async () => {
     const btn = $('btn-refresh');
     btn.disabled = true;
-    btn.textContent = '刷新中…';
+    $('refresh-label').textContent = '刷新中…';
     try {
       await api('/api/refresh', { method: 'POST' });
-      await loadAll();
-      showToast('全部入口已刷新');
+      if (await loadAll()) showToast('全部入口已刷新');
     } catch (err) {
       showToast(err.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = '↻ 刷新';
+      $('refresh-label').textContent = '刷新';
     }
   });
 
+  $('btn-retry').addEventListener('click', async () => {
+    $('btn-retry').disabled = true;
+    try {
+      await loadAll();
+    } finally {
+      $('btn-retry').disabled = false;
+    }
+  });
   $('btn-add').addEventListener('click', () => openEntryModal(null));
   $('modal-close').addEventListener('click', closeEntryModal);
   $('modal-cancel').addEventListener('click', closeEntryModal);
@@ -890,7 +936,7 @@
         stopOAuthPolling();
         closeEntryModal();
         const label = (res.entry && res.entry.name) || res.accountEmail || '新账号';
-        showToast(`✓ 授权成功，已接入 ${label}`);
+        showToast(`授权成功，已接入 ${label}`);
         await loadAll();
       }
     } catch (err) {
@@ -1004,8 +1050,10 @@
 
   document.querySelectorAll('.filter-tabs .tab').forEach((btn) => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.filter-tabs .tab').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
+      document.querySelectorAll('.filter-tabs .tab').forEach((b) => {
+        b.classList.toggle('active', b === btn);
+        b.setAttribute('aria-pressed', String(b === btn));
+      });
       state.filter = btn.dataset.filter;
       if (state.snapshot) renderCards(state.snapshot.entries);
     });
