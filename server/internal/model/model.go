@@ -23,65 +23,69 @@ const (
 // EntryConfig is persisted in the owner-only local config directory (0600).
 // Secrets never leave the server in plaintext API responses.
 type EntryConfig struct {
-	ID              string            `json:"id"`
-	Name            string            `json:"name"`
-	Provider        string            `json:"provider"`
-	Kind            EntryKind         `json:"kind"`
-	Badge           string            `json:"badge,omitempty"`
-	Enabled         bool              `json:"enabled"`
-	Pinned          bool              `json:"pinned"`
-	SortOrder       int               `json:"sortOrder"`
-	RefreshSeconds  int               `json:"refreshSeconds"`
-	DashboardURL    string            `json:"dashboardUrl,omitempty"`
-	Notes           string            `json:"notes,omitempty"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Provider       string    `json:"provider"`
+	Kind           EntryKind `json:"kind"`
+	Badge          string    `json:"badge,omitempty"`
+	Enabled        bool      `json:"enabled"`
+	Pinned         bool      `json:"pinned"`
+	SortOrder      int       `json:"sortOrder"`
+	RefreshSeconds int       `json:"refreshSeconds"`
+	DashboardURL   string    `json:"dashboardUrl,omitempty"`
+	Notes          string    `json:"notes,omitempty"`
 
 	// Optional recurring cost metadata (for personal subscription burn overview)
-	MonthlyCost     *float64          `json:"monthlyCost,omitempty"`
-	CostCurrency    string            `json:"costCurrency,omitempty"`
+	MonthlyCost  *float64 `json:"monthlyCost,omitempty"`
+	CostCurrency string   `json:"costCurrency,omitempty"`
 
 	// Credential & source settings (kept server-side; masked in public views)
-	AuthMode        string            `json:"authMode,omitempty"` // "oauth", "token", "file", "keychain", "none"
-	Secret          string            `json:"secret,omitempty"`   // API Key / Bearer access token / header value
-	RefreshToken    string            `json:"refreshToken,omitempty"`
-	TokenExpiresAt  *time.Time        `json:"tokenExpiresAt,omitempty"`
-	AccountEmail    string            `json:"accountEmail,omitempty"`
-	ProjectID       string            `json:"projectId,omitempty"`
-	CredentialFile  string            `json:"credentialFile,omitempty"`
-	AccountID       string            `json:"accountId,omitempty"`
+	AuthMode       string     `json:"authMode,omitempty"` // "oauth", "token", "file", "keychain", "none"
+	Secret         string     `json:"secret,omitempty"`   // API Key / Bearer access token / header value
+	RefreshToken   string     `json:"refreshToken,omitempty"`
+	TokenExpiresAt *time.Time `json:"tokenExpiresAt,omitempty"`
+	AccountEmail   string     `json:"accountEmail,omitempty"`
+	ProjectID      string     `json:"projectId,omitempty"`
+	CredentialFile string     `json:"credentialFile,omitempty"`
+	AccountID      string     `json:"accountId,omitempty"`
 
 	// Endpoint / Custom HTTP / Relay settings
-	BaseURL         string            `json:"baseUrl,omitempty"`
-	Method          string            `json:"method,omitempty"`
-	AuthHeader      string            `json:"authHeader,omitempty"`
-	AuthPrefix      string            `json:"authPrefix,omitempty"`
-	Headers         map[string]string `json:"headers,omitempty"`
+	BaseURL    string            `json:"baseUrl,omitempty"`
+	Method     string            `json:"method,omitempty"`
+	AuthHeader string            `json:"authHeader,omitempty"`
+	AuthPrefix string            `json:"authPrefix,omitempty"`
+	Headers    map[string]string `json:"headers,omitempty"`
+
+	// API status probe settings (e.g. Google Gemini API Key)
+	ProbeMode  string `json:"probeMode,omitempty"`  // "models" (zero-cost) | "generate" (minimal call for 402/429)
+	ProbeModel string `json:"probeModel,omitempty"` // Optional model ID for active probe
 
 	// Custom JSON extractor & Manual entry parameters
-	Currency        string            `json:"currency,omitempty"` // "CNY", "USD", etc.
-	Scale           float64           `json:"scale,omitempty"`    // Multiplier for raw numeric fields (default 1)
-	LowThreshold    *float64          `json:"lowThreshold,omitempty"`
-	WarnPercent     *float64          `json:"warnPercent,omitempty"` // Default 75
+	Currency     string   `json:"currency,omitempty"` // "CNY", "USD", etc.
+	Scale        float64  `json:"scale,omitempty"`    // Multiplier for raw numeric fields (default 1)
+	LowThreshold *float64 `json:"lowThreshold,omitempty"`
+	WarnPercent  *float64 `json:"warnPercent,omitempty"` // Default 75
 
 	// JSON dot-paths for custom_http
-	BalancePath     string            `json:"balancePath,omitempty"`
-	UsedPath        string            `json:"usedPath,omitempty"`
-	LimitPath       string            `json:"limitPath,omitempty"`
-	UsedPercentPath string            `json:"usedPercentPath,omitempty"`
-	ResetAtPath     string            `json:"resetAtPath,omitempty"`
-	PlanPath        string            `json:"planPath,omitempty"`
+	BalancePath     string `json:"balancePath,omitempty"`
+	UsedPath        string `json:"usedPath,omitempty"`
+	LimitPath       string `json:"limitPath,omitempty"`
+	UsedPercentPath string `json:"usedPercentPath,omitempty"`
+	ResetAtPath     string `json:"resetAtPath,omitempty"`
+	PlanPath        string `json:"planPath,omitempty"`
 
 	// Manual subscription / manual balance fields
-	ManualCycle     string            `json:"manualCycle,omitempty"`   // "monthly", "yearly", "weekly", "none"
-	BillingDay      int               `json:"billingDay,omitempty"`    // 1..31 for monthly cycle
-	NextResetDate   string            `json:"nextResetDate,omitempty"` // YYYY-MM-DD override
-	PlanLabel       string            `json:"planLabel,omitempty"`
-	QuotaUsed       *float64          `json:"quotaUsed,omitempty"`
-	QuotaTotal      *float64          `json:"quotaTotal,omitempty"`
-	QuotaUnit       string            `json:"quotaUnit,omitempty"`
-	ManualBalance   *float64          `json:"manualBalance,omitempty"`
+	ManualCycle   string   `json:"manualCycle,omitempty"`   // "monthly", "yearly", "weekly", "none"
+	BillingDay    int      `json:"billingDay,omitempty"`    // 1..31 for monthly cycle
+	NextResetDate string   `json:"nextResetDate,omitempty"` // YYYY-MM-DD override
+	PlanLabel     string   `json:"planLabel,omitempty"`
+	QuotaUsed     *float64 `json:"quotaUsed,omitempty"`
+	QuotaTotal    *float64 `json:"quotaTotal,omitempty"`
+	QuotaUnit     string   `json:"quotaUnit,omitempty"`
+	ManualBalance *float64 `json:"manualBalance,omitempty"`
 
-	CreatedAt       time.Time         `json:"createdAt"`
-	UpdatedAt       time.Time         `json:"updatedAt"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // EntryConfigPublic is safe to send to Web UI / Mac Client for editing.
@@ -148,32 +152,37 @@ type BalanceInfo struct {
 
 // EntrySnapshot is the unified live/cached state rendered by the menu bar app and the web UI.
 type EntrySnapshot struct {
-	ID             string        `json:"id"`
-	Name           string        `json:"name"`
-	Provider       string        `json:"provider"`
-	ProviderLabel  string        `json:"providerLabel"`
-	Kind           EntryKind     `json:"kind"`
-	Badge          string        `json:"badge"`
-	Enabled        bool          `json:"enabled"`
-	Pinned         bool          `json:"pinned"`
-	SortOrder      int           `json:"sortOrder"`
-	PlanLabel      string        `json:"planLabel,omitempty"`
-	AccountEmail   string        `json:"accountEmail,omitempty"`
-	DashboardURL   string        `json:"dashboardUrl,omitempty"`
-	Notes          string        `json:"notes,omitempty"`
-	MonthlyCost    *float64      `json:"monthlyCost,omitempty"`
-	CostCurrency   string        `json:"costCurrency,omitempty"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Provider      string    `json:"provider"`
+	ProviderLabel string    `json:"providerLabel"`
+	Kind          EntryKind `json:"kind"`
+	Badge         string    `json:"badge"`
+	Enabled       bool      `json:"enabled"`
+	Pinned        bool      `json:"pinned"`
+	SortOrder     int       `json:"sortOrder"`
+	PlanLabel     string    `json:"planLabel,omitempty"`
+	AccountEmail  string    `json:"accountEmail,omitempty"`
+	DashboardURL  string    `json:"dashboardUrl,omitempty"`
+	Notes         string    `json:"notes,omitempty"`
+	MonthlyCost   *float64  `json:"monthlyCost,omitempty"`
+	CostCurrency  string    `json:"costCurrency,omitempty"`
 
-	Status         StatusLevel   `json:"status"`
-	StatusReason   string        `json:"statusReason,omitempty"`
-	PrimaryMetric  string        `json:"primaryMetric"` // Compact summary e.g. "剩余 72%" or "¥48.50"
+	Status        StatusLevel `json:"status"`
+	StatusReason  string      `json:"statusReason,omitempty"`
+	PrimaryMetric string      `json:"primaryMetric"` // Compact summary e.g. "剩余 72%" or "¥48.50"
 
-	Windows        []QuotaWindow `json:"windows,omitempty"`
-	Balance        *BalanceInfo  `json:"balance,omitempty"`
+	Windows []QuotaWindow `json:"windows,omitempty"`
+	Balance *BalanceInfo  `json:"balance,omitempty"`
+	Details []KVDetail    `json:"details,omitempty"`
 
-	FetchedAt      *time.Time    `json:"fetchedAt,omitempty"`
-	NextRefreshAt  *time.Time    `json:"nextRefreshAt,omitempty"`
-	Error          string        `json:"error,omitempty"`
+	FetchedAt     *time.Time `json:"fetchedAt,omitempty"`
+	NextRefreshAt *time.Time `json:"nextRefreshAt,omitempty"`
+	Error         string     `json:"error,omitempty"`
+}
+
+func (s EntrySnapshot) HasMetrics() bool {
+	return len(s.Windows) > 0 || s.Balance != nil || len(s.Details) > 0
 }
 
 type CurrencyTotal struct {
@@ -183,14 +192,14 @@ type CurrencyTotal struct {
 }
 
 type SummaryStats struct {
-	TotalEntries       int             `json:"totalEntries"`
-	EnabledEntries     int             `json:"enabledEntries"`
-	SubscriptionCount  int             `json:"subscriptionCount"`
-	BalanceCount       int             `json:"balanceCount"`
-	WarningCount       int             `json:"warningCount"`
-	CriticalCount      int             `json:"criticalCount"`
-	AvailableBalances  []CurrencyTotal `json:"availableBalances"`
-	MonthlyFixedCosts  []CurrencyTotal `json:"monthlyFixedCosts"`
+	TotalEntries      int             `json:"totalEntries"`
+	EnabledEntries    int             `json:"enabledEntries"`
+	SubscriptionCount int             `json:"subscriptionCount"`
+	BalanceCount      int             `json:"balanceCount"`
+	WarningCount      int             `json:"warningCount"`
+	CriticalCount     int             `json:"criticalCount"`
+	AvailableBalances []CurrencyTotal `json:"availableBalances"`
+	MonthlyFixedCosts []CurrencyTotal `json:"monthlyFixedCosts"`
 }
 
 type SnapshotResponse struct {

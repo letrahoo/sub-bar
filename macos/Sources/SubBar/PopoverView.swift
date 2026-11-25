@@ -21,7 +21,6 @@ struct PopoverView: View {
     @ObservedObject var state: AppState
     @State private var activeTab: PopoverTab = .all
     @State private var editingEntryID: String? = nil
-    @State private var showEditor = false
     @State private var nowTick = Date()
 
     private let ticker = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
@@ -60,9 +59,9 @@ struct PopoverView: View {
         .tint(HCTheme.accent)
         .preferredColorScheme(.dark)
         .onReceive(ticker) { d in nowTick = d }
-        .sheet(isPresented: $showEditor) {
+        .sheet(isPresented: $state.isEditorPresented) {
             EntryEditorView(state: state, entryID: editingEntryID) {
-                showEditor = false
+                state.isEditorPresented = false
             }
         }
     }
@@ -111,7 +110,7 @@ struct PopoverView: View {
 
             Button {
                 editingEntryID = nil
-                showEditor = true
+                state.isEditorPresented = true
             } label: {
                 MaterialIcon.add.label("添加", size: 14)
                     .font(.system(size: 12, weight: .semibold))
@@ -273,7 +272,7 @@ struct PopoverView: View {
                                 },
                                 onEdit: {
                                     editingEntryID = item.id
-                                    showEditor = true
+                                    state.isEditorPresented = true
                                 }
                             )
                         }
@@ -335,7 +334,7 @@ struct PopoverView: View {
                 .multilineTextAlignment(.center)
             Button {
                 editingEntryID = nil
-                showEditor = true
+                state.isEditorPresented = true
             } label: {
                 MaterialIcon.add.label("添加订阅或余额")
                     .font(.system(size: 12.5, weight: .semibold))
@@ -391,7 +390,7 @@ struct PopoverView: View {
                                 }
                                 IconButton(icon: .edit, title: "编辑 \(item.name)") {
                                     editingEntryID = item.id
-                                    showEditor = true
+                                    state.isEditorPresented = true
                                 }
                             }
                             .padding(8)
@@ -583,16 +582,21 @@ struct EntryCardView: View {
                         }
                     }
                     if let details = bal.details, !details.isEmpty {
-                        HStack(spacing: 6) {
-                            ForEach(details.prefix(3)) { d in
-                                Text("\(d.label) \(d.value)")
-                                    .font(.system(size: 11, weight: .medium).monospacedDigit())
-                                    .foregroundColor(HCTheme.textSecondary)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2.5)
-                                    .background(RoundedRectangle(cornerRadius: 5).fill(HCTheme.cardElevated))
-                                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(HCTheme.border, lineWidth: 1))
+                        ChipFlowLayout(spacing: 6) {
+                            ForEach(details.prefix(4)) { d in
+                                detailChipView(d)
                             }
+                        }
+                    }
+                }
+            } else if (item.windows?.isEmpty ?? true), let details = item.details, !details.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(item.primaryMetric)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(item.status == "ok" ? HCTheme.textPrimary : HCTheme.statusColor(item.status))
+                    ChipFlowLayout(spacing: 6) {
+                        ForEach(details.prefix(5)) { d in
+                            detailChipView(d)
                         }
                     }
                 }
@@ -636,6 +640,17 @@ struct EntryCardView: View {
                 .stroke(borderColorForStatus(item.status), lineWidth: 1.4)
         )
         .opacity(item.enabled ? 1.0 : 0.65)
+    }
+
+    private func detailChipView(_ d: KVDetail) -> some View {
+        Text("\(d.label) \(d.value)")
+            .font(.system(size: 11, weight: .medium).monospacedDigit())
+            .foregroundColor(HCTheme.textSecondary)
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2.5)
+            .background(RoundedRectangle(cornerRadius: 5).fill(HCTheme.cardElevated))
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(HCTheme.border, lineWidth: 1))
     }
 
     private func borderColorForStatus(_ status: String) -> Color {
@@ -709,6 +724,50 @@ struct EntryCardView: View {
                         .foregroundColor(pace > 8 ? HCTheme.warn : HCTheme.ok)
                 }
             }
+        }
+    }
+}
+
+private struct ChipFlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var maxUsedWidth: CGFloat = 0
+
+        for sub in subviews {
+            let size = sub.sizeThatFits(ProposedViewSize(width: maxWidth.isFinite ? maxWidth : nil, height: nil))
+            if x > 0 && x + size.width > maxWidth {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width
+            maxUsedWidth = max(maxUsedWidth, x)
+            x += spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: maxWidth.isFinite ? maxWidth : maxUsedWidth, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for sub in subviews {
+            let size = sub.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+            if x > bounds.minX && x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            sub.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }

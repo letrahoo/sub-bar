@@ -2,10 +2,12 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class StatusBarController: NSObject {
+final class StatusBarController: NSObject, NSPopoverDelegate {
     private let statusItem: NSStatusItem
     private let popover: NSPopover
     private let appState: AppState
+    private var globalClickMonitor: Any?
+    private var dismissObservers: [NSObjectProtocol] = []
 
     init(appState: AppState) {
         self.appState = appState
@@ -13,6 +15,7 @@ final class StatusBarController: NSObject {
         self.popover = NSPopover()
         super.init()
 
+        popover.delegate = self
         popover.behavior = .transient
         popover.animates = true
         popover.contentSize = NSSize(width: 400, height: 640)
@@ -28,6 +31,16 @@ final class StatusBarController: NSObject {
             self?.renderStatusItem()
         }
         renderStatusItem()
+    }
+
+    deinit {
+        if let monitor = globalClickMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        for obs in dismissObservers {
+            NotificationCenter.default.removeObserver(obs)
+            NSWorkspace.shared.notificationCenter.removeObserver(obs)
+        }
     }
 
     @objc private func handleStatusBarClick(_ sender: NSStatusBarButton) {
@@ -58,9 +71,88 @@ final class StatusBarController: NSObject {
         }
         NSApp.activate(ignoringOtherApps: true)
         popover.contentViewController?.view.window?.makeKey()
+        startDismissMonitoring()
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        stopDismissMonitoring()
+    }
+
+    private var canAutoClosePopover: Bool {
+        guard popover.isShown, !appState.isEditorPresented else { return false }
+        if let win = popover.contentViewController?.view.window {
+            if win.attachedSheet != nil || !win.sheets.isEmpty {
+                return false
+            }
+        }
+        return true
+    }
+
+    private func closePopoverIfAllowed() {
+        guard canAutoClosePopover else { return }
+        popover.performClose(nil)
+    }
+
+    private func startDismissMonitoring() {
+        stopDismissMonitoring()
+
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.closePopoverIfAllowed()
+            }
+        }
+
+        let nc = NotificationCenter.default
+        dismissObservers.append(
+            nc.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.closePopoverIfAllowed()
+                }
+            }
+        )
+        if let popWindow = popover.contentViewController?.view.window {
+            dismissObservers.append(
+                nc.addObserver(forName: NSWindow.didResignKeyNotification, object: popWindow, queue: .main) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.canAutoClosePopover else { return }
+                        if self.popover.contentViewController?.view.window?.isKeyWindow != true {
+                            self.popover.performClose(nil)
+                        }
+                    }
+                }
+            )
+        }
+        dismissObservers.append(
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.activeSpaceDidChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.closePopoverIfAllowed()
+                }
+            }
+        )
+    }
+
+    private func stopDismissMonitoring() {
+        if let monitor = globalClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalClickMonitor = nil
+        }
+        let nc = NotificationCenter.default
+        let wnc = NSWorkspace.shared.notificationCenter
+        for obs in dismissObservers {
+            nc.removeObserver(obs)
+            wnc.removeObserver(obs)
+        }
+        dismissObservers.removeAll()
     }
 
     private func showContextMenu(_ sender: NSStatusBarButton) {
+        if popover.isShown {
+            popover.performClose(nil)
+        }
         let menu = NSMenu()
         let refreshItem = NSMenuItem(title: "立即刷新全部入口", action: #selector(menuRefreshAll), keyEquivalent: "r")
         refreshItem.target = self

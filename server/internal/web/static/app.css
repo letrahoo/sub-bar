@@ -524,6 +524,16 @@ select:focus-visible {
   letter-spacing: -0.02em;
 }
 
+.status-figure-warning,
+.status-figure-stale {
+  color: var(--warn);
+}
+
+.status-figure-critical,
+.status-figure-error {
+  color: var(--crit);
+}
+
 .detail-chips {
   display: flex;
   flex-wrap: wrap;

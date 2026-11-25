@@ -37,8 +37,8 @@ type OAuthSpec struct {
 }
 
 const (
-	kimiCLIVersion    = "1.12.0"
-	kimiCLIUserAgent  = "KimiCLI/1.12.0"
+	kimiCLIVersion   = "1.12.0"
+	kimiCLIUserAgent = "KimiCLI/1.12.0"
 )
 
 var (
@@ -255,13 +255,13 @@ func kimiClientHeaders(deviceID string) map[string]string {
 		did = "subbar-kimi-default-device"
 	}
 	return map[string]string{
-		"User-Agent":        kimiCLIUserAgent,
-		"X-Msh-Platform":    "kimi_cli",
-		"X-Msh-Version":     kimiCLIVersion,
-		"X-Msh-Device-Name": "SubBar",
+		"User-Agent":         kimiCLIUserAgent,
+		"X-Msh-Platform":     "kimi_cli",
+		"X-Msh-Version":      kimiCLIVersion,
+		"X-Msh-Device-Name":  "SubBar",
 		"X-Msh-Device-Model": runtime.GOARCH,
-		"X-Msh-Os-Version":  runtime.GOOS,
-		"X-Msh-Device-Id":   did,
+		"X-Msh-Os-Version":   runtime.GOOS,
+		"X-Msh-Device-Id":    did,
 	}
 }
 
@@ -653,8 +653,8 @@ func ImportLocalDiscovery(ctx context.Context, hintID string) (model.EntryConfig
 		}
 
 		var doc struct {
-			AccessToken  string `json:"access_token"`
-			RefreshToken string `json:"refresh_token"`
+			AccessToken   string `json:"access_token"`
+			RefreshToken  string `json:"refresh_token"`
 			ClaudeAiOauth *struct {
 				AccessToken      string `json:"accessToken"`
 				RefreshToken     string `json:"refreshToken"`

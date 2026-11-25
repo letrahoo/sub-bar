@@ -11,19 +11,24 @@ import (
 	"github.com/letrahoo/sub-bar/server/internal/store"
 )
 
+type inflightCall struct {
+	done chan struct{}
+	res  model.EntrySnapshot
+}
+
 type Poller struct {
 	store    *store.Store
 	registry *providers.Registry
 
 	inflightMu sync.Mutex
-	inflight   map[string]chan model.EntrySnapshot
+	inflight   map[string]*inflightCall
 }
 
 func New(st *store.Store, reg *providers.Registry) *Poller {
 	return &Poller{
 		store:    st,
 		registry: reg,
-		inflight: make(map[string]chan model.EntrySnapshot),
+		inflight: make(map[string]*inflightCall),
 	}
 }
 
@@ -107,24 +112,24 @@ func (p *Poller) RefreshOne(ctx context.Context, id string) (model.EntrySnapshot
 	}
 
 	p.inflightMu.Lock()
-	if waitCh, busy := p.inflight[id]; busy {
+	if call, busy := p.inflight[id]; busy {
 		p.inflightMu.Unlock()
 		select {
-		case res := <-waitCh:
-			return res, true
+		case <-call.done:
+			return call.res, true
 		case <-ctx.Done():
 			prev, _ := p.store.GetSnapshot(id)
 			return prev, true
 		}
 	}
-	doneCh := make(chan model.EntrySnapshot, 1)
-	p.inflight[id] = doneCh
+	call := &inflightCall{done: make(chan struct{})}
+	p.inflight[id] = call
 	p.inflightMu.Unlock()
 
 	var result model.EntrySnapshot
 	defer func() {
-		doneCh <- result
-		close(doneCh)
+		call.res = result
+		close(call.done)
 		p.inflightMu.Lock()
 		delete(p.inflight, id)
 		p.inflightMu.Unlock()
@@ -234,7 +239,7 @@ func (p *Poller) executeProbe(ctx context.Context, cfg model.EntryConfig) model.
 		if retryAt.After(next) && backoff < 5*time.Minute {
 			retryAt = next
 		}
-		if hasPrev && (len(prev.Windows) > 0 || prev.Balance != nil) {
+		if hasPrev && prev.HasMetrics() {
 			prev.Name = cfg.Name
 			prev.Badge = badge
 			prev.Pinned = cfg.Pinned
@@ -302,6 +307,7 @@ func (p *Poller) executeProbe(ctx context.Context, cfg model.EntryConfig) model.
 		PrimaryMetric: res.PrimaryMetric,
 		Windows:       res.Windows,
 		Balance:       res.Balance,
+		Details:       res.Details,
 		FetchedAt:     &now,
 		NextRefreshAt: &next,
 	}

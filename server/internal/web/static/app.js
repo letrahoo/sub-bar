@@ -142,7 +142,7 @@
   }
 
   function hasQuotaOrBalance(item) {
-    return Boolean((item.windows && item.windows.length > 0) || item.balance != null);
+    return Boolean((item.windows && item.windows.length > 0) || item.balance != null || (item.details && item.details.length > 0));
   }
 
   function isInitialErrorEntry(item) {
@@ -481,6 +481,28 @@
         bBlock.appendChild(chips);
       }
       card.appendChild(bBlock);
+    } else if ((!item.windows || item.windows.length === 0) && item.details && item.details.length > 0) {
+      const sBlock = document.createElement('div');
+      sBlock.className = 'balance-block';
+
+      const sMain = document.createElement('div');
+      sMain.className = 'balance-main';
+      const fig = document.createElement('div');
+      fig.className = `balance-figure status-figure-${item.status}`;
+      fig.textContent = item.primaryMetric || statusBadgeLabel(item.status, item.statusReason);
+      sMain.appendChild(fig);
+      sBlock.appendChild(sMain);
+
+      const chips = document.createElement('div');
+      chips.className = 'detail-chips';
+      for (const d of item.details) {
+        const c = document.createElement('span');
+        c.className = 'detail-chip';
+        c.textContent = `${d.label}: ${d.value}`;
+        chips.appendChild(c);
+      }
+      sBlock.appendChild(chips);
+      card.appendChild(sBlock);
     }
 
     if (item.error) {

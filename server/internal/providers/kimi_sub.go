@@ -331,11 +331,11 @@ func parseKimiUsagesPayload(raw []byte) (kimiParsedUsage, error) {
 			Level string `json:"level"`
 			Name  string `json:"name"`
 		} `json:"membership"`
-		Plan   string            `json:"plan"`
-		Tier   string            `json:"tier"`
-		Usage  *kimiQuotaDetail  `json:"usage"`
-		Limits []kimiLimitItem   `json:"limits"`
-		Usages json.RawMessage   `json:"usages"`
+		Plan   string           `json:"plan"`
+		Tier   string           `json:"tier"`
+		Usage  *kimiQuotaDetail `json:"usage"`
+		Limits []kimiLimitItem  `json:"limits"`
+		Usages json.RawMessage  `json:"usages"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return kimiParsedUsage{}, fmt.Errorf("解析 Kimi 配额 JSON 失败: %w", err)

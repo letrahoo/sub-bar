@@ -512,6 +512,9 @@ func (m *Manager) finalizeAuthorizedSession(sess *session, reqCopy StartRequest,
 		}
 		if updatedCfg, uErr := m.store.UpdateEntry(saved.ID, saved, true); uErr == nil {
 			saved = updatedCfg
+			if mergedSnap, ok := m.store.GetSnapshot(saved.ID); ok {
+				snap = mergedSnap
+			}
 		}
 	}
 	pub := saved.Public()
@@ -544,54 +547,78 @@ func (m *Manager) persistAuthorizedEntry(req StartRequest, upd providers.TokenUp
 		enabled = *req.Enabled
 	}
 
-	// Re-authorizing an existing entry updates it in-place.
+	// Re-authorizing an existing entry (explicit entryId OR same provider + account already stored) updates it in-place.
+	var matchedExisting *model.EntryConfig
+	explicitReauth := false
 	if strings.TrimSpace(req.EntryID) != "" {
 		if existing, exists := m.store.GetEntry(strings.TrimSpace(req.EntryID)); exists {
-			if n := strings.TrimSpace(req.Name); n != "" {
-				existing.Name = n
-			}
-			if b := strings.TrimSpace(req.Badge); b != "" {
-				existing.Badge = b
-			}
-			existing.Enabled = enabled
-			existing.Pinned = req.Pinned
-			if req.RefreshSeconds >= 30 {
-				existing.RefreshSeconds = req.RefreshSeconds
-			}
-			if req.MonthlyCost != nil {
-				existing.MonthlyCost = req.MonthlyCost
-			}
-			if req.CostCurrency != "" {
-				existing.CostCurrency = req.CostCurrency
-			}
-			if req.DashboardURL != "" {
-				existing.DashboardURL = req.DashboardURL
-			}
-			if req.Notes != "" {
-				existing.Notes = req.Notes
-			}
-			if req.PlanLabel != "" {
-				existing.PlanLabel = req.PlanLabel
-			}
-			if strings.TrimSpace(req.BaseURL) != "" {
-				existing.BaseURL = strings.TrimSpace(req.BaseURL)
-			}
-			existing.AuthMode = "oauth"
-			existing.Secret = upd.AccessToken
-			if upd.RefreshToken != "" {
-				existing.RefreshToken = upd.RefreshToken
-			}
-			existing.TokenExpiresAt = upd.TokenExpiresAt
-			if upd.AccountEmail != "" {
-				existing.AccountEmail = upd.AccountEmail
-			}
-			if upd.AccountID != "" {
-				existing.AccountID = upd.AccountID
-			} else if req.AccountID != "" {
-				existing.AccountID = strings.TrimSpace(req.AccountID)
-			}
-			return m.store.UpdateEntry(existing.ID, existing, true)
+			matchedExisting = &existing
+			explicitReauth = true
 		}
+	}
+	if matchedExisting == nil {
+		probeCandidate := model.EntryConfig{
+			Provider:     req.Provider,
+			BaseURL:      strings.TrimSpace(req.BaseURL),
+			AccountEmail: upd.AccountEmail,
+			AccountID:    coalesceNonEmpty(req.AccountID, upd.AccountID),
+			Secret:       upd.AccessToken,
+			RefreshToken: upd.RefreshToken,
+		}
+		if dup, exists := m.store.FindDuplicate(probeCandidate); exists {
+			matchedExisting = &dup
+		}
+	}
+	if matchedExisting != nil {
+		existing := *matchedExisting
+		if n := strings.TrimSpace(req.Name); n != "" {
+			existing.Name = n
+		}
+		if b := strings.TrimSpace(req.Badge); b != "" {
+			existing.Badge = b
+		}
+		existing.Enabled = enabled
+		if explicitReauth {
+			existing.Pinned = req.Pinned
+		} else {
+			existing.Pinned = existing.Pinned || req.Pinned
+		}
+		if req.RefreshSeconds >= 30 {
+			existing.RefreshSeconds = req.RefreshSeconds
+		}
+		if req.MonthlyCost != nil {
+			existing.MonthlyCost = req.MonthlyCost
+		}
+		if req.CostCurrency != "" {
+			existing.CostCurrency = req.CostCurrency
+		}
+		if req.DashboardURL != "" {
+			existing.DashboardURL = req.DashboardURL
+		}
+		if req.Notes != "" {
+			existing.Notes = req.Notes
+		}
+		if req.PlanLabel != "" {
+			existing.PlanLabel = req.PlanLabel
+		}
+		if strings.TrimSpace(req.BaseURL) != "" {
+			existing.BaseURL = strings.TrimSpace(req.BaseURL)
+		}
+		existing.AuthMode = "oauth"
+		existing.Secret = upd.AccessToken
+		if upd.RefreshToken != "" {
+			existing.RefreshToken = upd.RefreshToken
+		}
+		existing.TokenExpiresAt = upd.TokenExpiresAt
+		if upd.AccountEmail != "" {
+			existing.AccountEmail = upd.AccountEmail
+		}
+		if upd.AccountID != "" {
+			existing.AccountID = upd.AccountID
+		} else if req.AccountID != "" {
+			existing.AccountID = strings.TrimSpace(req.AccountID)
+		}
+		return m.store.UpdateEntry(existing.ID, existing, true)
 	}
 
 	name := strings.TrimSpace(req.Name)
@@ -712,6 +739,13 @@ func (m *Manager) gc() {
 			delete(m.listeners, port)
 		}
 	}
+}
+
+func coalesceNonEmpty(a, b string) string {
+	if s := strings.TrimSpace(a); s != "" {
+		return s
+	}
+	return strings.TrimSpace(b)
 }
 
 func defaultOAuthEntryName(providerID, email string) string {

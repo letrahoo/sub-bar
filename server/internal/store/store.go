@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -106,6 +107,11 @@ func (s *Store) load() error {
 		}
 	}
 	s.sortEntriesLocked()
+	if _, changed := s.deduplicateEntriesLocked(""); changed {
+		s.sortEntriesLocked()
+		_ = s.saveEntriesLocked()
+		_ = s.saveSnapshotsLocked()
+	}
 	return nil
 }
 
@@ -220,6 +226,17 @@ func (s *Store) AddEntry(cfg model.EntryConfig) (model.EntryConfig, error) {
 	defer s.mu.Unlock()
 
 	now := time.Now().UTC()
+	if matchIdx := s.findDuplicateIndexLocked(cfg, ""); matchIdx >= 0 {
+		merged := mergeIncomingIntoExisting(s.entries[matchIdx], cfg, now)
+		s.entries[matchIdx] = merged
+		s.syncSnapshotMetadataLocked(merged)
+		s.sortEntriesLocked()
+		if err := s.saveEntriesLocked(); err != nil {
+			return model.EntryConfig{}, err
+		}
+		return merged, nil
+	}
+
 	if strings.TrimSpace(cfg.ID) == "" {
 		cfg.ID = newID(cfg.Provider)
 	}
@@ -290,10 +307,29 @@ func (s *Store) UpdateEntry(id string, incoming model.EntryConfig, keepSecret bo
 		incoming.SortOrder = prev.SortOrder
 	}
 	s.entries[idx] = incoming
+	s.syncSnapshotMetadataLocked(incoming)
+
+	survivorID := incoming.ID
+	if sid, changed := s.deduplicateEntriesLocked(incoming.ID); changed && sid != "" {
+		survivorID = sid
+	}
 	s.sortEntriesLocked()
 
-	// Sync metadata fields onto existing cached snapshot immediately.
-	if snap, ok := s.snapshots[id]; ok {
+	if err := s.saveEntriesLocked(); err != nil {
+		return model.EntryConfig{}, err
+	}
+	_ = s.saveSnapshotsLocked()
+
+	for _, e := range s.entries {
+		if e.ID == survivorID {
+			return e, nil
+		}
+	}
+	return incoming, nil
+}
+
+func (s *Store) syncSnapshotMetadataLocked(incoming model.EntryConfig) {
+	if snap, ok := s.snapshots[incoming.ID]; ok {
 		snap.Name = incoming.Name
 		snap.Pinned = incoming.Pinned
 		snap.Enabled = incoming.Enabled
@@ -311,14 +347,8 @@ func (s *Store) UpdateEntry(id string, incoming model.EntryConfig, keepSecret bo
 			snap.Status = model.StatusDisabled
 			snap.StatusReason = "已停用"
 		}
-		s.snapshots[id] = snap
-		_ = s.saveSnapshotsLocked()
+		s.snapshots[incoming.ID] = snap
 	}
-
-	if err := s.saveEntriesLocked(); err != nil {
-		return model.EntryConfig{}, err
-	}
-	return incoming, nil
 }
 
 // UpdateOAuthTokens persists silently refreshed OAuth credentials without overwriting user metadata.
@@ -363,6 +393,10 @@ func (s *Store) UpdateOAuthTokens(id, accessToken, refreshToken string, expiresA
 	if snap, ok := s.snapshots[id]; ok && cur.AccountEmail != "" {
 		snap.AccountEmail = cur.AccountEmail
 		s.snapshots[id] = snap
+	}
+	if _, changed := s.deduplicateEntriesLocked(cur.ID); changed {
+		s.sortEntriesLocked()
+		_ = s.saveSnapshotsLocked()
 	}
 	return s.saveEntriesLocked()
 }
@@ -468,7 +502,7 @@ func (s *Store) BuildSnapshotResponse(providerNames map[string]string) model.Sna
 			}
 		}
 
-		hasData := len(snap.Windows) > 0 || snap.Balance != nil
+		hasData := snap.HasMetrics()
 		if e.Enabled && hasData {
 			switch snap.Status {
 			case model.StatusWarning, model.StatusStale:
@@ -569,4 +603,339 @@ func takeRunes(s string, n int) string {
 		return s
 	}
 	return string(r[:n])
+}
+
+// ============================================================================
+// Same-Account + Same-Source Deduplication
+// ============================================================================
+
+func (s *Store) findDuplicateIndexLocked(candidate model.EntryConfig, excludeID string) int {
+	for i, existing := range s.entries {
+		if excludeID != "" && existing.ID == excludeID {
+			continue
+		}
+		if entriesSameAccountSource(existing, candidate) {
+			return i
+		}
+	}
+	return -1
+}
+
+// FindDuplicate returns an existing entry matching candidate's provider/source and account identity.
+func (s *Store) FindDuplicate(candidate model.EntryConfig) (model.EntryConfig, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if idx := s.findDuplicateIndexLocked(candidate, ""); idx >= 0 {
+		return s.entries[idx], true
+	}
+	return model.EntryConfig{}, false
+}
+
+// deduplicateEntriesLocked merges entries that share the same provider/source and account identity.
+// If focusID is non-empty and participates in a duplicate group, its surviving ID is returned.
+func (s *Store) deduplicateEntriesLocked(focusID string) (survivorForFocus string, changed bool) {
+	if len(s.entries) < 2 {
+		return focusID, false
+	}
+	survivorForFocus = focusID
+	kept := make([]model.EntryConfig, 0, len(s.entries))
+
+	for _, entry := range s.entries {
+		matchIdx := -1
+		for i, k := range kept {
+			if entriesSameAccountSource(k, entry) {
+				matchIdx = i
+				break
+			}
+		}
+		if matchIdx < 0 {
+			kept = append(kept, entry)
+			continue
+		}
+
+		changed = true
+		existing := kept[matchIdx]
+		winner, loser := pickPrimaryDuplicate(existing, entry, s.snapshots)
+		merged := mergeDuplicateConfigs(winner, loser, s.snapshots)
+		kept[matchIdx] = merged
+
+		if focusID != "" && (loser.ID == focusID || winner.ID == focusID) {
+			survivorForFocus = merged.ID
+		}
+		// Preserve valid snapshot if winner lacked one, then remove loser snapshot.
+		wSnap, wOK := s.snapshots[merged.ID]
+		lSnap, lOK := s.snapshots[loser.ID]
+		if lOK && (!wOK || (!wSnap.HasMetrics() && lSnap.HasMetrics()) || (wSnap.Status == model.StatusError && lSnap.Status != model.StatusError && lSnap.HasMetrics())) {
+			lSnap.ID = merged.ID
+			s.snapshots[merged.ID] = lSnap
+		}
+		delete(s.snapshots, loser.ID)
+		s.syncSnapshotMetadataLocked(merged)
+	}
+
+	if changed {
+		s.entries = kept
+	}
+	return survivorForFocus, changed
+}
+
+func entriesSameAccountSource(a, b model.EntryConfig) bool {
+	provA := strings.ToLower(strings.TrimSpace(a.Provider))
+	provB := strings.ToLower(strings.TrimSpace(b.Provider))
+	if provA == "" || provA != provB {
+		return false
+	}
+	// Independent manual ledgers and generic HTTP extractors can legitimately have multiple entries.
+	if provA == "manual" || provA == "custom_http" {
+		return false
+	}
+	if normalizeBaseURLForDedup(provA, a.BaseURL) != normalizeBaseURLForDedup(provB, b.BaseURL) {
+		return false
+	}
+
+	switch provA {
+	case "codex_oauth":
+		emailA := strings.ToLower(strings.TrimSpace(a.AccountEmail))
+		emailB := strings.ToLower(strings.TrimSpace(b.AccountEmail))
+		wsA := strings.ToLower(strings.TrimSpace(a.AccountID))
+		wsB := strings.ToLower(strings.TrimSpace(b.AccountID))
+		if emailA != "" && emailB != "" {
+			if emailA != emailB {
+				return false
+			}
+			// Preserve distinct ChatGPT workspaces under the same email when both specify workspace IDs.
+			if wsA != "" && wsB != "" && wsA != wsB {
+				return false
+			}
+			return true
+		}
+		if wsA != "" && wsB != "" && wsA == wsB {
+			return true
+		}
+		return sameNonEmptyCredential(a, b)
+
+	case "antigravity_oauth", "claude_oauth", "kimi_oauth":
+		emailA := strings.ToLower(strings.TrimSpace(a.AccountEmail))
+		emailB := strings.ToLower(strings.TrimSpace(b.AccountEmail))
+		if emailA != "" && emailB != "" {
+			return emailA == emailB
+		}
+		return sameNonEmptyCredential(a, b)
+
+	default:
+		// API-key providers (gemini_api, deepseek, openrouter, moonshot, siliconflow, openai_billing):
+		// deduplicate only when the API key itself matches on the same source/endpoint.
+		secA := strings.TrimSpace(a.Secret)
+		secB := strings.TrimSpace(b.Secret)
+		return secA != "" && secA == secB
+	}
+}
+
+func sameNonEmptyCredential(a, b model.EntryConfig) bool {
+	rtA := strings.TrimSpace(a.RefreshToken)
+	rtB := strings.TrimSpace(b.RefreshToken)
+	if rtA != "" && rtA == rtB {
+		return true
+	}
+	secA := strings.TrimSpace(a.Secret)
+	secB := strings.TrimSpace(b.Secret)
+	return secA != "" && secA == secB
+}
+
+func normalizeBaseURLForDedup(provider, raw string) string {
+	s := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if s != "" {
+		if u, err := url.Parse(s); err == nil && u.Scheme != "" && u.Host != "" {
+			u.Scheme = strings.ToLower(u.Scheme)
+			u.Host = strings.ToLower(u.Host)
+			u.Path = strings.TrimRight(u.Path, "/")
+			s = u.String()
+		}
+	}
+	lower := strings.ToLower(s)
+
+	switch provider {
+	case "gemini_api":
+		if s == "" || lower == "https://generativelanguage.googleapis.com" || lower == "https://generativelanguage.googleapis.com/v1beta" {
+			return "https://generativelanguage.googleapis.com/v1beta"
+		}
+		if !strings.HasSuffix(lower, "/v1beta") && !strings.HasSuffix(lower, "/v1") && !strings.HasSuffix(lower, "/v1alpha") {
+			return s + "/v1beta"
+		}
+		return s
+	case "kimi_oauth":
+		if s == "" || lower == "https://api.kimi.com" || lower == "https://www.kimi.com" {
+			return "https://api.kimi.com"
+		}
+		if lower == "https://api.kimi.ai" || lower == "https://www.kimi.ai" {
+			return "https://api.kimi.ai"
+		}
+		return s
+	case "deepseek":
+		if s == "" || lower == "https://api.deepseek.com/user/balance" {
+			return "https://api.deepseek.com/user/balance"
+		}
+		return s
+	case "openrouter":
+		if s == "" || lower == "https://openrouter.ai/api/v1" {
+			return "https://openrouter.ai/api/v1"
+		}
+		return s
+	case "moonshot":
+		if s == "" || lower == "https://api.moonshot.cn/v1/users/me/balance" {
+			return "https://api.moonshot.cn/v1/users/me/balance"
+		}
+		return s
+	case "siliconflow":
+		if s == "" || lower == "https://api.siliconflow.cn/v1/user/info" {
+			return "https://api.siliconflow.cn/v1/user/info"
+		}
+		return s
+	case "openai_billing":
+		if strings.HasSuffix(lower, "/v1") {
+			return s[:len(s)-3]
+		}
+		return s
+	default:
+		return s
+	}
+}
+
+func pickPrimaryDuplicate(a, b model.EntryConfig, snaps map[string]model.EntrySnapshot) (winner, loser model.EntryConfig) {
+	if duplicatePriorityScore(b, snaps) > duplicatePriorityScore(a, snaps) {
+		return b, a
+	}
+	if duplicatePriorityScore(a, snaps) > duplicatePriorityScore(b, snaps) {
+		return a, b
+	}
+	if a.SortOrder != b.SortOrder {
+		if a.SortOrder < b.SortOrder {
+			return a, b
+		}
+		return b, a
+	}
+	if b.CreatedAt.Before(a.CreatedAt) {
+		return b, a
+	}
+	return a, b
+}
+
+func duplicatePriorityScore(e model.EntryConfig, snaps map[string]model.EntrySnapshot) int {
+	score := 0
+	if e.Enabled {
+		score += 100
+	}
+	if e.Pinned {
+		score += 40
+	}
+	if snap, ok := snaps[e.ID]; ok && snap.HasMetrics() && snap.Status != model.StatusError {
+		score += 20
+	}
+	if strings.TrimSpace(e.RefreshToken) != "" {
+		score += 10
+	}
+	if strings.TrimSpace(e.AccountEmail) != "" {
+		score += 5
+	}
+	if e.MonthlyCost != nil && *e.MonthlyCost > 0 {
+		score += 2
+	}
+	return score
+}
+
+func mergeDuplicateConfigs(winner, loser model.EntryConfig, snaps map[string]model.EntrySnapshot) model.EntryConfig {
+	out := winner
+	out.Pinned = winner.Pinned || loser.Pinned
+	out.Enabled = winner.Enabled || loser.Enabled
+
+	// Prefer the fresher valid credentials when loser was updated more recently.
+	loserSnap, loserHasSnap := snaps[loser.ID]
+	loserHealthy := !loserHasSnap || loserSnap.Status != model.StatusError
+	if loser.UpdatedAt.After(winner.UpdatedAt) && loserHealthy {
+		if strings.TrimSpace(loser.Secret) != "" {
+			out.Secret = loser.Secret
+		}
+		if strings.TrimSpace(loser.RefreshToken) != "" {
+			out.RefreshToken = loser.RefreshToken
+		}
+		if loser.TokenExpiresAt != nil {
+			out.TokenExpiresAt = loser.TokenExpiresAt
+		}
+	} else {
+		if strings.TrimSpace(out.Secret) == "" {
+			out.Secret = loser.Secret
+		}
+		if strings.TrimSpace(out.RefreshToken) == "" {
+			out.RefreshToken = loser.RefreshToken
+		}
+		if out.TokenExpiresAt == nil {
+			out.TokenExpiresAt = loser.TokenExpiresAt
+		}
+	}
+
+	out.AccountEmail = coalesce(out.AccountEmail, loser.AccountEmail)
+	out.AccountID = coalesce(out.AccountID, loser.AccountID)
+	out.ProjectID = coalesce(out.ProjectID, loser.ProjectID)
+	out.PlanLabel = coalesce(out.PlanLabel, loser.PlanLabel)
+	out.DashboardURL = coalesce(out.DashboardURL, loser.DashboardURL)
+	out.Notes = coalesce(out.Notes, loser.Notes)
+	out.ProbeMode = coalesce(out.ProbeMode, loser.ProbeMode)
+	out.ProbeModel = coalesce(out.ProbeModel, loser.ProbeModel)
+	if out.MonthlyCost == nil {
+		out.MonthlyCost = loser.MonthlyCost
+	}
+	out.CostCurrency = coalesce(out.CostCurrency, loser.CostCurrency)
+	if loser.UpdatedAt.After(out.UpdatedAt) {
+		out.UpdatedAt = loser.UpdatedAt
+	}
+	return out
+}
+
+func mergeIncomingIntoExisting(existing, incoming model.EntryConfig, now time.Time) model.EntryConfig {
+	out := existing
+	out.UpdatedAt = now
+	if strings.TrimSpace(incoming.Name) != "" {
+		out.Name = strings.TrimSpace(incoming.Name)
+	}
+	if strings.TrimSpace(incoming.Badge) != "" {
+		out.Badge = strings.TrimSpace(incoming.Badge)
+	}
+	out.Enabled = incoming.Enabled
+	out.Pinned = existing.Pinned || incoming.Pinned
+	if incoming.RefreshSeconds >= 30 {
+		out.RefreshSeconds = incoming.RefreshSeconds
+	}
+	if incoming.MonthlyCost != nil {
+		out.MonthlyCost = incoming.MonthlyCost
+	}
+	out.CostCurrency = coalesce(incoming.CostCurrency, existing.CostCurrency)
+	out.DashboardURL = coalesce(incoming.DashboardURL, existing.DashboardURL)
+	out.Notes = coalesce(incoming.Notes, existing.Notes)
+	out.PlanLabel = coalesce(incoming.PlanLabel, existing.PlanLabel)
+	out.BaseURL = coalesce(incoming.BaseURL, existing.BaseURL)
+	out.ProbeMode = coalesce(incoming.ProbeMode, existing.ProbeMode)
+	out.ProbeModel = coalesce(incoming.ProbeModel, existing.ProbeModel)
+	out.Currency = coalesce(incoming.Currency, existing.Currency)
+	if incoming.LowThreshold != nil {
+		out.LowThreshold = incoming.LowThreshold
+	}
+	if incoming.WarnPercent != nil {
+		out.WarnPercent = incoming.WarnPercent
+	}
+
+	// Update credentials from incoming while keeping existing refresh token if incoming omitted it.
+	out.AuthMode = coalesce(incoming.AuthMode, existing.AuthMode)
+	if strings.TrimSpace(incoming.Secret) != "" {
+		out.Secret = strings.TrimSpace(incoming.Secret)
+	}
+	if strings.TrimSpace(incoming.RefreshToken) != "" {
+		out.RefreshToken = strings.TrimSpace(incoming.RefreshToken)
+	}
+	if incoming.TokenExpiresAt != nil {
+		out.TokenExpiresAt = incoming.TokenExpiresAt
+	}
+	out.AccountEmail = coalesce(incoming.AccountEmail, existing.AccountEmail)
+	out.AccountID = coalesce(incoming.AccountID, existing.AccountID)
+	out.ProjectID = coalesce(incoming.ProjectID, existing.ProjectID)
+	return out
 }

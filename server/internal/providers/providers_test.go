@@ -588,3 +588,160 @@ func TestAntigravityAICodeFetchQuotaStatusWeeklyAndLegacyCLIFallback(t *testing.
 		}
 	}
 }
+
+func TestGeminiAPIKeyModesAndErrorClassification(t *testing.T) {
+	var generateStatus int = 200
+	var generateBody string = `{"candidates":[{"content":{"parts":[{"text":"pong"}]}}]}`
+	var modelsStatus int = 200
+	var modelsBody string = `{
+		"models": [
+			{"name": "models/gemini-2.5-pro", "supportedGenerationMethods": ["generateContent", "countTokens"]},
+			{"name": "models/gemini-2.5-flash", "supportedGenerationMethods": ["generateContent", "countTokens"]},
+			{"name": "models/gemini-2.0-flash", "supportedGenerationMethods": ["generateContent"]},
+			{"name": "models/text-embedding-004", "supportedGenerationMethods": ["embedContent"]}
+		]
+	}`
+	var lastGeneratePath string
+	var lastHost string
+
+	withMockHTTP(t, func(r *http.Request) (*http.Response, error) {
+		lastHost = r.URL.Host
+		if r.URL.Query().Get("key") != "" {
+			t.Fatalf("API key must be passed in x-goog-api-key header, not URL query: %s", r.URL.String())
+		}
+		if r.Header.Get("x-goog-api-key") == "" {
+			t.Fatalf("missing x-goog-api-key header")
+		}
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/models"):
+			return jsonResp(modelsStatus, modelsBody), nil
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":generateContent"):
+			lastGeneratePath = r.URL.Path
+			return jsonResp(generateStatus, generateBody), nil
+		default:
+			return jsonResp(404, `{}`), nil
+		}
+	})
+
+	reg := NewRegistry()
+	prov, ok := reg.Get("gemini_api")
+	if !ok {
+		t.Fatalf("gemini_api provider not registered")
+	}
+
+	// Case 1: Default zero-cost models validation mode
+	res1, err := prov.Fetch(context.Background(), model.EntryConfig{
+		Secret: "AIzaTestKey123",
+	})
+	if err != nil {
+		t.Fatalf("gemini models fetch failed: %v", err)
+	}
+	if res1.Status != model.StatusOK || res1.PrimaryMetric != "可用" || lastGeneratePath != "" {
+		t.Fatalf("expected healthy models-only result without generateContent call, got %+v (genPath=%q)", res1, lastGeneratePath)
+	}
+	if lastHost != "generativelanguage.googleapis.com" {
+		t.Fatalf("unexpected default host: %s", lastHost)
+	}
+	foundCount, foundFeatured := false, false
+	for _, d := range res1.Details {
+		if d.Label == "可用模型" && d.Value == "3 个" {
+			foundCount = true
+		}
+		if d.Label == "代表模型" && d.Value == "gemini-2.5-pro" {
+			foundFeatured = true
+		}
+	}
+	if !foundCount || !foundFeatured {
+		t.Fatalf("expected model count (3) and featured model (gemini-2.5-pro) in details, got %+v", res1.Details)
+	}
+
+	// Case 2: Active generateContent probe (auto-picks gemini-2.5-flash)
+	res2, err := prov.Fetch(context.Background(), model.EntryConfig{
+		Secret:    "AIzaTestKey123",
+		ProbeMode: "generate",
+	})
+	if err != nil {
+		t.Fatalf("gemini active probe failed: %v", err)
+	}
+	if res2.Status != model.StatusOK || lastGeneratePath != "/v1beta/models/gemini-2.5-flash:generateContent" {
+		t.Fatalf("expected OK active probe against gemini-2.5-flash, got status=%s path=%q", res2.Status, lastGeneratePath)
+	}
+
+	// Case 3: HTTP 429 RESOURCE_EXHAUSTED with limit: 0 + QuotaFailure + RetryInfo
+	generateStatus = http.StatusTooManyRequests
+	generateBody = `{
+		"error": {
+			"code": 429,
+			"message": "Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0",
+			"status": "RESOURCE_EXHAUSTED",
+			"details": [
+				{
+					"@type": "type.googleapis.com/google.rpc.QuotaFailure",
+					"violations": [{"quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests"}]
+				},
+				{
+					"@type": "type.googleapis.com/google.rpc.RetryInfo",
+					"retryDelay": "35s"
+				}
+			]
+		}
+	}`
+	res3, err := prov.Fetch(context.Background(), model.EntryConfig{
+		Secret:    "AIzaTestKey123",
+		ProbeMode: "generate",
+	})
+	if err != nil {
+		t.Fatalf("expected structured 429 status result, got err: %v", err)
+	}
+	if res3.Status != model.StatusWarning || res3.PrimaryMetric != "限流" || res3.StatusReason != "配额为 0 (429)" {
+		t.Fatalf("unexpected 429 classification: %+v", res3)
+	}
+	hasRetry, hasMetric := false, false
+	for _, d := range res3.Details {
+		if d.Label == "重试间隔" && d.Value == "35s" {
+			hasRetry = true
+		}
+		if d.Label == "配额维度" && strings.Contains(d.Value, "generate_content_free_tier_requests") {
+			hasMetric = true
+		}
+	}
+	if !hasRetry || !hasMetric {
+		t.Fatalf("expected retry delay and quota metric in 429 details, got %+v", res3.Details)
+	}
+
+	// Case 4: HTTP 402 Payment Required -> StatusCritical
+	generateStatus = http.StatusPaymentRequired
+	generateBody = `{"error":{"code":402,"message":"Prepaid balance depleted.","status":"FAILED_PRECONDITION"}}`
+	res4, err := prov.Fetch(context.Background(), model.EntryConfig{
+		Secret:     "AIzaTestKey123",
+		ProbeMode:  "generate",
+		ProbeModel: "models/gemini-2.5-pro",
+		BaseURL:    "https://proxy.example.com/v1",
+	})
+	if err != nil {
+		t.Fatalf("expected structured 402 status result, got err: %v", err)
+	}
+	if res4.Status != model.StatusCritical || res4.PrimaryMetric != "余额不足" {
+		t.Fatalf("unexpected 402 classification: %+v", res4)
+	}
+	if lastHost != "proxy.example.com" || lastGeneratePath != "/v1/models/gemini-2.5-pro:generateContent" {
+		t.Fatalf("unexpected custom base/model routing: host=%s path=%s", lastHost, lastGeneratePath)
+	}
+
+	// Case 5: HTTP 400 API_KEY_INVALID -> hard error without leaking key
+	modelsStatus = http.StatusBadRequest
+	modelsBody = `{
+		"error": {
+			"code": 400,
+			"message": "API key not valid. Please pass a valid API key.",
+			"status": "INVALID_ARGUMENT",
+			"details": [{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "API_KEY_INVALID"}]
+		}
+	}`
+	_, err = prov.Fetch(context.Background(), model.EntryConfig{
+		Secret: "AIza-SuperSecretBadKey",
+	})
+	if err == nil || !strings.Contains(err.Error(), "无效") || strings.Contains(err.Error(), "AIza-SuperSecretBadKey") {
+		t.Fatalf("expected sanitized invalid key error, got: %v", err)
+	}
+}

@@ -93,6 +93,7 @@ struct EntrySnapshot: Codable, Identifiable {
     let primaryMetric: String
     let windows: [QuotaWindow]?
     let balance: BalanceInfo?
+    let details: [KVDetail]?
     let fetchedAt: String?
     let nextRefreshAt: String?
     let error: String?
@@ -100,6 +101,7 @@ struct EntrySnapshot: Codable, Identifiable {
     var hasQuotaOrBalance: Bool {
         if let w = windows, !w.isEmpty { return true }
         if balance != nil { return true }
+        if let d = details, !d.isEmpty { return true }
         return false
     }
 
@@ -206,6 +208,8 @@ struct EntryConfigPublic: Codable, Identifiable {
     let method: String?
     let authHeader: String?
     let authPrefix: String?
+    let probeMode: String?
+    let probeModel: String?
     let currency: String?
     let scale: Double?
     let lowThreshold: Double?

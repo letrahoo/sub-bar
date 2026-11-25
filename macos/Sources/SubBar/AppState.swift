@@ -9,6 +9,7 @@ final class AppState: ObservableObject {
     @Published var entriesConfig: [String: EntryConfigPublic] = [:]
     @Published var discoverHints: [DiscoveryHint] = []
     @Published var isLoading = false
+    @Published var isEditorPresented = false
     @Published var errorMessage: String?
     @Published var toastMessage: String?
 

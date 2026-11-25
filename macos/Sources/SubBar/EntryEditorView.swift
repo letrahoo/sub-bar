@@ -555,6 +555,8 @@ struct EntryEditorView: View {
             if let v = cfg.method { fv["method"] = v }
             if let v = cfg.authHeader { fv["authHeader"] = v }
             if let v = cfg.authPrefix { fv["authPrefix"] = v }
+            if let v = cfg.probeMode { fv["probeMode"] = v }
+            if let v = cfg.probeModel { fv["probeModel"] = v }
             if let v = cfg.currency { fv["currency"] = v }
             if let v = cfg.scale, v != 0 { fv["scale"] = String(v) }
             if let v = cfg.lowThreshold { fv["lowThreshold"] = String(v) }

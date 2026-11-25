@@ -37,6 +37,7 @@ type FetchResult struct {
 	StatusReason  string
 	Windows       []model.QuotaWindow
 	Balance       *model.BalanceInfo
+	Details       []model.KVDetail
 	TokenUpdate   *TokenUpdate
 }
 
@@ -59,6 +60,7 @@ func NewRegistry() *Registry {
 		&codexProvider{},
 		&claudeProvider{},
 		&kimiSubscriptionProvider{},
+		&geminiAPIProvider{},
 		&deepseekProvider{},
 		&openrouterProvider{},
 		&moonshotProvider{},
