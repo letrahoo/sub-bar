@@ -26,6 +26,7 @@ App 启动时会拉起内置服务（`127.0.0.1:8328`），退出时自动关闭
 | 类型 | 模式 |
 | --- | --- |
 | Antigravity、Codex / ChatGPT、Claude、Kimi（OAuth） | 订阅配额 |
+| Google Gemini（API Key） | 密钥与限流状态 |
 | DeepSeek、OpenRouter、Moonshot、SiliconFlow | API 余额 |
 | OpenAI 兼容计费接口（NewAPI / OneAPI） | API 余额 |
 | 自定义 HTTP JSON 接口 | 配额或余额 |
@@ -46,8 +47,11 @@ App 启动时会拉起内置服务（`127.0.0.1:8328`），退出时自动关闭
 ## 构建
 
 ```bash
-make test   # Go 测试
-make all    # 生成 dist/subbar-server 与 dist/SubBar.app
+make lint    # gofmt、go vet、脚本/JS 语法、密钥检查与 Swift 编译检查
+make test    # Go 单元与集成测试（含 -race 竞态检测）
+make accept  # 基于编译产物的黑盒端到端自动化验收测试
+make verify  # 一键执行 lint + test + accept
+make all     # 生成 dist/subbar-server、dist/SubBar.app 与 dist/SubBar-macOS.dmg
 ```
 
 需要 Go 1.22+ 与 Xcode 命令行工具。推送 `v*` 标签会通过 GitHub Actions 自动构建并发布。

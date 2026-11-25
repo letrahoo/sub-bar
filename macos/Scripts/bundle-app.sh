@@ -81,7 +81,10 @@ SWIFT_ICON
 /usr/bin/iconutil -c icns "$ICONSET_DIR" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 rm -rf "$(dirname "$ICONSET_DIR")"
 
-cat > "$APP_BUNDLE/Contents/Info.plist" <<'EOF'
+APP_VERSION="${SUBBAR_VERSION:-0.2.0}"
+APP_BUILD="${SUBBAR_BUILD:-4}"
+
+cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -103,9 +106,9 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'EOF'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.1</string>
+  <string>${APP_VERSION}</string>
   <key>CFBundleVersion</key>
-  <string>3</string>
+  <string>${APP_BUILD}</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>

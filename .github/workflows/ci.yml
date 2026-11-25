@@ -5,17 +5,15 @@ on:
   pull_request:
 
 jobs:
-  server:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: server/go.mod
-      - run: go vet ./...
-        working-directory: server
-      - run: go test ./...
-        working-directory: server
+      - name: Lint, race unit tests & E2E acceptance
+        run: make verify
 
   macos-app:
     runs-on: macos-latest
@@ -24,5 +22,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: server/go.mod
-      - run: make server
-      - run: ./macos/Scripts/bundle-app.sh
+      - name: Lint (including Swift build check)
+        run: make lint
+      - name: Build server & SubBar.app
+        run: |
+          make server
+          ./macos/Scripts/bundle-app.sh
+      - name: Verify app bundle, DMG & bundled server E2E
+        run: make verify-app

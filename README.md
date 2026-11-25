@@ -26,6 +26,7 @@ The app starts its bundled server on `127.0.0.1:8328` and stops it on quit. The 
 | Type | Mode |
 | --- | --- |
 | Antigravity, Codex / ChatGPT, Claude, Kimi (OAuth) | Subscription quota |
+| Google Gemini (API Key) | Key & rate-limit status |
 | DeepSeek, OpenRouter, Moonshot, SiliconFlow | API balance |
 | OpenAI-compatible billing (NewAPI / OneAPI) | API balance |
 | Custom HTTP JSON endpoint | Quota or balance |
@@ -46,8 +47,11 @@ If needed, you can override any provider's client credentials in the OAuth secti
 ## Build
 
 ```bash
-make test   # Go tests
-make all    # dist/subbar-server and dist/SubBar.app
+make lint    # gofmt, go vet, shell/JS syntax, secret scan, Swift compile
+make test    # Go unit & integration tests (-race)
+make accept  # Black-box E2E acceptance test against compiled server
+make verify  # lint + test + accept
+make all     # dist/subbar-server, dist/SubBar.app, and dist/SubBar-macOS.dmg
 ```
 
 Requires Go 1.22+ and Xcode command line tools. Pushing a `v*` tag builds and publishes a release via GitHub Actions.

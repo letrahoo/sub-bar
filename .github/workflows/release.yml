@@ -16,6 +16,11 @@ jobs:
         with:
           go-version-file: server/go.mod
 
+      - name: Verify (lint, unit tests, E2E acceptance)
+        env:
+          SUBBAR_SKIP_SWIFT_LINT: "1"
+        run: make verify
+
       - name: Build universal server
         run: |
           mkdir -p dist
@@ -29,7 +34,16 @@ jobs:
       - name: Build universal SubBar.app
         env:
           SUBBAR_SWIFT_ARCHS: "--arch arm64 --arch x86_64"
-        run: ./macos/Scripts/bundle-app.sh
+        run: |
+          if [[ "${GITHUB_REF_NAME:-}" == v* ]]; then
+            export SUBBAR_VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          ./macos/Scripts/bundle-app.sh
+
+      - name: Verify universal app bundle & DMG
+        env:
+          SUBBAR_EXPECT_UNIVERSAL: "1"
+        run: make verify-app
 
       - name: Checksum
         working-directory: dist

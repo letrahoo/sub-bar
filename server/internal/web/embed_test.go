@@ -27,7 +27,7 @@ func TestEmbeddedWebAssets(t *testing.T) {
 	page := get("/", "text/html")
 	get("/app.css", "text/css")
 	get("/material-icons.LICENSE.txt", "text/plain")
-	get("/app.js", "text/javascript", "application/javascript")
+	script := get("/app.js", "text/javascript", "application/javascript")
 	var sprite struct {
 		Symbols []struct {
 			ID   string `xml:"id,attr"`
@@ -52,7 +52,16 @@ func TestEmbeddedWebAssets(t *testing.T) {
 	}
 	for _, ref := range refs {
 		if !ids[string(ref[1])] {
-			t.Errorf("missing SVG symbol %q", ref[1])
+			t.Errorf("missing SVG symbol %q referenced in index.html", ref[1])
+		}
+	}
+	jsRefs := regexp.MustCompile(`(?:icon|cardAction)\(\s*'([\w-]+)'`).FindAllSubmatch(script, -1)
+	if len(jsRefs) == 0 {
+		t.Fatal("no icon references found in app.js")
+	}
+	for _, ref := range jsRefs {
+		if !ids[string(ref[1])] {
+			t.Errorf("missing SVG symbol %q referenced in app.js", ref[1])
 		}
 	}
 }
